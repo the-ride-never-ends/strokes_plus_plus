@@ -5,14 +5,14 @@
 namespace strokes::actions {
 
 enum class ActionType {
-    keyboard_shortcut,
+  keyboard_shortcut,
 };
 
 struct Action {
-    ActionType type{ActionType::keyboard_shortcut};
-    std::string value;
+  ActionType type{ActionType::keyboard_shortcut};
+  std::string value;
 
-    friend bool operator==(const Action&, const Action&) = default;
+  friend bool operator==(const Action&, const Action&) = default;
 };
 
 }  // namespace strokes::actions

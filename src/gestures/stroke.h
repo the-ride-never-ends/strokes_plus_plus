@@ -1,8 +1,8 @@
 #pragma once
 
-#include "gestures/point.h"
-
 #include <vector>
+
+#include "gestures/point.h"
 
 namespace strokes::gestures {
 

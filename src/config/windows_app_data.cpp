@@ -6,11 +6,12 @@
 #include <ShlObj.h>
 
 namespace strokes::config {
-std::optional<std::filesystem::path> windows_configuration_directory() {
-    PWSTR value = nullptr;
-    if (FAILED(::SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, nullptr, &value))) return {};
-    std::filesystem::path result(value);
-    ::CoTaskMemFree(value);
-    return result / L"StrokesPlusPlus";
+std::optional<std::filesystem::path> configuration_directory() {
+  PWSTR value = nullptr;
+  if (FAILED(::SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, nullptr, &value)))
+    return {};
+  std::filesystem::path result(value);
+  ::CoTaskMemFree(value);
+  return result / L"StrokesPlusPlus";
 }
-}
+}  // namespace strokes::config

@@ -1,25 +1,25 @@
 #pragma once
 
-#include "config/configuration.h"
-#include "config/json.h"
-
 #include <optional>
 #include <string>
+
+#include "config/configuration.h"
+#include "config/json.h"
 
 namespace strokes::config {
 
 template <typename T>
 struct DecodeResult {
-    std::optional<T> value;
-    std::string error;
-    [[nodiscard]] explicit operator bool() const noexcept { return value.has_value(); }
+  std::optional<T> value;
+  std::string error;
+  [[nodiscard]] explicit operator bool() const noexcept { return value.has_value(); }
 };
 
 [[nodiscard]] json::Value encode(const GlobalOptions& options);
 [[nodiscard]] json::Value encode(const GestureFile& file);
 [[nodiscard]] json::Value encode(const ProfileFile& file);
-[[nodiscard]] DecodeResult<GlobalOptions> decode_global_options(const json::Value& value);
-[[nodiscard]] DecodeResult<GestureFile> decode_gesture_file(const json::Value& value);
-[[nodiscard]] DecodeResult<ProfileFile> decode_profile_file(const json::Value& value);
+[[nodiscard]] DecodeResult<GlobalOptions> decode_options(const json::Value& value);
+[[nodiscard]] DecodeResult<GestureFile> decode_gestures(const json::Value& value);
+[[nodiscard]] DecodeResult<ProfileFile> decode_profiles(const json::Value& value);
 
 }  // namespace strokes::config

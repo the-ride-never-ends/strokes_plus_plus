@@ -4,10 +4,11 @@
 
 namespace strokes::input {
 
+/// Supplies a snapshot of physically held modifier keys.
 class IModifierStateProvider {
-public:
-    virtual ~IModifierStateProvider() = default;
-    [[nodiscard]] virtual ModifierState current_modifiers() const = 0;
+ public:
+  virtual ~IModifierStateProvider() = default;
+  [[nodiscard]] virtual ModifierState current_modifiers() const = 0;
 };
 
 }  // namespace strokes::input

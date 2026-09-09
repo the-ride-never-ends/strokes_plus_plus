@@ -1,17 +1,19 @@
 #pragma once
 
 #include <iostream>
+#include <source_location>
 #include <string_view>
 
 namespace strokes::tests {
 
 inline int failures = 0;
 
-inline void check(bool condition, std::string_view message) {
-    if (!condition) {
-        std::cerr << "FAIL: " << message << '\n';
-        ++failures;
-    }
+inline void check(bool condition, std::string_view message,
+                  const std::source_location location = std::source_location::current()) {
+  if (!condition) {
+    std::cerr << location.file_name() << ':' << location.line() << ": FAIL: " << message << '\n';
+    ++failures;
+  }
 }
 
 void run_state_machine_tests();

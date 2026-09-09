@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Moved movement-threshold ownership into the synchronous input router while allowing physical pointer movement to pass through during activation-button holds.
+- Deferred gesture-point allocation until capture begins, cached validated profile regular expressions, and moved DPI discovery out of the low-level mouse-hook callback.
+- Reworked overlay drawing around a retained backbuffer, incremental dirty-region repainting, and display-geometry refresh on `WM_DISPLAYCHANGE`.
+- Expanded the settings UI with profile enablement, editable process selection, full criterion management, action removal, UTF-8-safe profile names, default GUI fonts, and per-monitor DPI rescaling.
+- Standardized C++ formatting and shortened the callable names identified by the code review; added API documentation to the central abstractions.
+- Made the development runner prefer an explicit or `PATH` CMake installation before its machine-specific fallback, and aligned the README build directory with the runner.
+
+### Fixed
+
+- Preserved valid gesture and profile files when one configuration component is malformed; invalid files are quarantined independently instead of causing an all-default rewrite.
+- Made three-file configuration updates transactional with startup rollback, durable flushes, and non-throwing filesystem error handling; tray-triggered saves now run on a coalescing background worker.
+- Accepted the partial configuration examples in MVP.md, validated shortcuts and regular expressions at decode time, and retained valid gestures when individual templates are malformed.
+- Restored an ordinary activation-button click at its original press position without freezing cursor movement, and safely cancelled malformed active input sequences.
+- Balanced partial keyboard injection failures and temporarily neutralized unrelated held modifiers before restoring the user's physical modifier state.
+- Bounded JSON nesting, emitted compact round-trip-safe numbers, rotated oversized logs, and delayed gesture-start logging until capture actually begins.
+- Made Escape suppression survive hook shutdown until the corresponding key-up, and limited Win32 class cleanup to classes registered by the owning component.
+- Reported startup integration failures visibly and isolated the executable idle test from the user's real configuration directory.
+
+### Tests
+
+- Added direct decoding tests for all MVP configuration examples, corrupt-component and interrupted-transaction recovery, two-thread SPSC behavior, disabled end-to-end routing, and additional malformed-input paths.
+- Added a `GestureEngine.exe --idle-test` CTest that measures the live process against the idle CPU and 50 MB working-set targets.
+- Expanded the routing benchmark to cover complete button-down, pointer-move, and button-up interactions with DPI scaling enabled.
+
+## [0.1.0]
+
 ### Added
 
 - C++20 CMake project with separate portable `strokes_core` and Windows-specific `strokes_windows` libraries.
@@ -37,7 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - System tray lifecycle controls for enabling, disabling, opening settings, and exiting, including visual status and Explorer-restart recovery.
 - Transparent, click-through, non-activating gesture overlay spanning the Windows virtual desktop with thread-safe live stroke rendering and lifecycle cleanup.
 - Dependency-free JSON parser and deterministic serializer with full value types, escape/Unicode handling, numeric validation, duplicate-key rejection, and parse-error offsets.
-- Versioned JSON codecs and atomic three-file configuration storage for global options, gesture templates, profiles, and actions.
+- Versioned JSON codecs and configuration storage with atomic per-file writes for global options, gesture templates, profiles, and actions.
 - `%LOCALAPPDATA%\StrokesPlusPlus` startup integration with first-run defaults, backup recovery, and runtime application of saved thresholds, activation button, enabled state, recognition sensitivity, and overlay options.
 - Thread-safe JSON Lines logging under Local AppData for application, configuration, hook, gesture, recognition, and action lifecycle events.
 - Minimal RAII low-level keyboard hook for Escape cancellation, including injected-key filtering and balanced suppression of Escape down/up events.
@@ -52,17 +80,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Hook suspension while the modal settings editor owns configuration, preventing stale input from accumulating during edits.
 - Record-level configuration recovery that skips malformed gestures, templates, profiles, criteria, and actions while retaining valid siblings and logging useful warnings.
 - End-to-end engine coverage for cancellation, closed original targets, and strokes crossing negative-to-positive virtual-screen coordinates.
-- Automated latency gate for the synchronous low-level mouse-hook routing hot path.
 - Foreground-window DPI-scaled activation thresholds, frozen per interaction and tested at 100%, 125%, 150%, and 200% scaling.
 - Abstract gesture-feedback port and end-to-end router, engine, overlay, context, recognition, and action integration coverage.
 - Rapid repeated-overlay lifecycle and cancellation-cleanup regression coverage.
-- Non-disruptive Win32 smoke tests for hook lifecycle, hidden overlay creation, foreground context capture, native click construction, Escape filtering, and idle CPU/memory budgets.
+- Non-disruptive Win32 smoke tests for hook lifecycle, hidden overlay creation, foreground context capture, native click construction, and Escape filtering.
 - Per-monitor-v2 DPI awareness and reliability coverage for extreme coordinates, rapid repeated gestures, and recovery after action failure.
 - Reserved input-queue capacity for release/cancel control events during high-frequency pointer movement.
 - Automated recognition performance gate using a 32-template library and 1,000 recognition iterations.
 - Corrected the tray host to use a hidden broadcast-capable window so Explorer restart notifications are received.
 - Validated gesture and application-profile repositories supporting identity-safe edits, enablement invariants, training-template management, matching criteria, and action mappings.
 - Implementation backlog in `TODO.md`, derived from the MVP specification and Gherkin feature file.
+- MVP code review in `CODE_REVIEW.md`, tracing `src/` and `tests/` against the specification.
 - Unit coverage for normalization, recognition, state transitions, gesture sessions, profile matching, action resolution, shortcut handling, input queues, and mouse routing.
 
 ### Changed
@@ -75,11 +103,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Prevented disabled gestures and profiles from participating in matching.
 - Prevented malformed shortcuts and regular expressions from disrupting the engine.
-- Prevented injected keyboard modifiers from being left logically pressed after an action.
 - Prevented physically held modifiers from being released by injected actions.
 - Prevented a failed mouse-event delivery from leaving the synchronous router permanently active.
 - Prevented resolved actions from borrowing configuration storage that may no longer exist at execution time.
-- Prevented held-Escape key repeats and suspend/resume boundaries from leaking unmatched Escape events.
+- Prevented held-Escape key repeats from leaking unmatched Escape events.
 
 ### Verification
 

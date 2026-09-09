@@ -5,16 +5,15 @@
 
 namespace strokes::context {
 
+/// Evaluates every criterion in an enabled application profile.
 class ProfileMatcher {
-public:
-    [[nodiscard]] bool matches(
-        const ApplicationProfile& profile,
-        const ApplicationContext& application) const;
+ public:
+  [[nodiscard]] bool matches(const ApplicationProfile& profile,
+                             const ApplicationContext& application) const;
 
-private:
-    [[nodiscard]] static bool matches_criterion(
-        const MatchCriterion& criterion,
-        const ApplicationContext& application);
+ private:
+  [[nodiscard]] static bool matches_criterion(const MatchCriterion& criterion,
+                                              const ApplicationContext& application);
 };
 
 }  // namespace strokes::context

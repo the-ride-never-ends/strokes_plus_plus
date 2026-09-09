@@ -14,12 +14,31 @@ Requirements:
 From a Visual Studio Developer PowerShell:
 
 ```powershell
-cmake -S . -B build -A x64
-cmake --build build --config Debug
-ctest --test-dir build -C Debug --output-on-failure
+.\run.ps1
 ```
 
-Run `build/Debug/GestureEngine.exe` (or the equivalent configured build directory). The
+That command configures the build when necessary, builds the Debug application, and
+starts it in the notification area. To build, run all tests, and then start it:
+
+```powershell
+.\run.ps1 -Test
+```
+
+To build and test without launching the application:
+
+```powershell
+.\run.ps1 -Test -NoRun
+```
+
+The equivalent manual commands are:
+
+```powershell
+cmake -S . -B build-vs2026 -A x64
+cmake --build build-vs2026 --config Debug
+ctest --test-dir build-vs2026 -C Debug --output-on-failure
+```
+
+Run `build-vs2026/Debug/GestureEngine.exe` (or the equivalent configured build directory). The
 application has no taskbar window; use its notification-area icon to enable or disable
 gestures, open Settings, or exit. Settings run in-process for the MVP, while recognition
 and action execution run on the engine worker thread.

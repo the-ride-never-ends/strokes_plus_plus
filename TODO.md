@@ -2,6 +2,8 @@
 
 Derived from [MVP.md](MVP.md) and [mvp.feature](mvp.feature). Completed items reflect the current repository, not merely planned behavior.
 
+Audited against the source on 8 September 2026. Unchecked items carry the finding ID from [CODE_REVIEW.md](CODE_REVIEW.md).
+
 ## 1. Project foundation
 
 - [x] Configure a C++20 CMake project.
@@ -38,7 +40,7 @@ Derived from [MVP.md](MVP.md) and [mvp.feature](mvp.feature). Completed items re
 ## 3. Global Windows input
 
 - [x] Implement an RAII `WH_MOUSE_LL` hook using `SetWindowsHookEx`.
-- [x] Keep the hook callback free of disk I/O, recognition, regex, UI work, and blocking logging.
+- [x] Keep the hook callback free of disk I/O, recognition, regex, UI work, blocking logging, and cross-process Win32 queries.
 - [x] Translate Win32 movement and supported-button messages into engine input events.
 - [x] Route and suppress configured activation-button interactions synchronously.
 - [x] Preserve normal activation-button behavior for clicks below the threshold.
@@ -93,6 +95,7 @@ Derived from [MVP.md](MVP.md) and [mvp.feature](mvp.feature). Completed items re
 - [x] Reject malformed, duplicate, modifier-only, and unsupported shortcuts.
 - [x] Generate modifier-down, key-down, key-up, and reverse modifier-up ordering.
 - [x] Avoid releasing modifiers that were already physically held.
+- [x] Release injected modifiers when `SendInput` only partially succeeds.
 - [x] Implement a testable keyboard-input abstraction.
 - [x] Implement the Windows `SendInput` keyboard backend.
 - [x] Report input-injection failure without throwing or terminating the engine.
@@ -106,6 +109,7 @@ Derived from [MVP.md](MVP.md) and [mvp.feature](mvp.feature). Completed items re
 
 - [x] Create a transparent, non-activating, click-through Win32 overlay window.
 - [x] Cover the full Windows virtual-screen rectangle, including negative coordinates.
+- [x] Track virtual-screen geometry changes after creation.
 - [x] Show the overlay only after entering `Capturing`.
 - [x] Render the filtered stroke as points arrive.
 - [x] Keep the overlay from stealing keyboard focus.
@@ -134,13 +138,15 @@ Derived from [MVP.md](MVP.md) and [mvp.feature](mvp.feature). Completed items re
   - [x] `config.json` global options.
   - [x] `gestures.json` definitions and templates.
   - [x] `profiles.json` match criteria and action mappings.
+- [x] Accept the configuration documents shown in MVP.md §15.2-15.4.
 - [x] Create defaults when required files do not exist.
 - [x] Load saved enabled state and activation button at startup.
 - [x] Persist movement, point-distance, point-limit, recognition, and overlay options.
 - [x] Persist gesture identities, names, enabled states, and all templates.
 - [x] Persist profiles and global/application-specific actions.
 - [x] Save changes using temporary files, backups, and interrupted-save recovery.
-- [x] Recover from malformed entries where possible and report useful errors.
+- [x] Recover from malformed `gestures.json` and `profiles.json` entries and report useful errors.
+- [x] Recover from malformed `config.json` without discarding valid gesture and profile data.
 - [x] Verify definitions, templates, mappings, and settings survive restart.
 
 ## 10. Settings and training UI
@@ -152,6 +158,7 @@ Derived from [MVP.md](MVP.md) and [mvp.feature](mvp.feature). Completed items re
 - [x] Save multiple training samples for one gesture.
 - [x] Assign and validate keyboard shortcuts.
 - [x] Create, rename, update, and delete application profiles.
+- [x] Enable and disable an existing application profile.
 - [x] Enter a target process for a profile.
 - [x] Configure process, title, and class matching criteria/modes.
 - [x] Configure per-gesture application overrides and global actions.
@@ -174,7 +181,8 @@ Derived from [MVP.md](MVP.md) and [mvp.feature](mvp.feature). Completed items re
 - [x] Log startup/shutdown, hook status, gesture lifecycle, recognition result/score, actions, and configuration errors.
 - [x] Include matched profile identity and resolution source in action logs.
 - [x] Do not log every mouse-movement event.
-- [x] Keep one recognition/action/configuration failure from stopping subsequent gestures.
+- [x] Keep one recognition or action failure from stopping subsequent gestures.
+- [x] Keep one configuration failure from terminating the process.
 - [x] Test rapid movement, maximum-size strokes, repeated gestures, and closed targets.
 - [x] Keep idle CPU effectively at 0% and target less than 50 MB idle memory.
 - [x] Measure the synchronous hook-routing hot path substantially below 1 ms per event.
@@ -195,6 +203,8 @@ Derived from [MVP.md](MVP.md) and [mvp.feature](mvp.feature). Completed items re
 - [x] Add rapid repeated-gesture state tests.
 - [x] Add end-to-end tests around abstract hook, overlay, context, and action ports.
 - [x] Add JSON round-trip, missing-file, malformed-file, and backup-recovery tests.
+- [x] Decode the MVP.md §15 example documents in a test rather than only round-tripping encoder output.
+- [x] Exercise the SPSC input queue from two threads.
 - [x] Add Win32 integration smoke tests that do not disrupt normal desktop input.
 
 ## 14. MVP acceptance checklist
@@ -206,7 +216,8 @@ Derived from [MVP.md](MVP.md) and [mvp.feature](mvp.feature). Completed items re
 - [x] Scenario 5: A global keyboard mapping executes in an application without an override.
 - [x] Scenario 6: A matching application mapping overrides the global mapping.
 - [x] Scenario 7: Escape cancels capture, hides the overlay, executes nothing, and returns to idle.
-- [x] Scenario 8: Disabling gestures leaves mouse behavior normal and prevents capture, overlay, and actions.
+- [x] Scenario 8 behavior: Disabling gestures leaves mouse behavior normal and prevents capture, overlay, and actions.
+- [x] Scenario 8 verification: an end-to-end test covers the disabled path through the router and engine.
 - [x] Scenario 9: Gestures, templates, and mappings persist across restart.
 - [x] Scenario 10: A cross-monitor stroke is fully captured and recognized.
 
