@@ -49,15 +49,26 @@ bool WindowsSettingsWindow::show(HINSTANCE instance, config::ConfigurationBundle
   wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
   const ATOM registered = ::RegisterClassExW(&wc);
   if (registered == 0 && ::GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
-  window_ =
-      ::CreateWindowExW(WS_EX_APPWINDOW, class_name, L"Strokes++ Settings",
-                        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT,
-                        CW_USEDEFAULT, 680, 760, nullptr, nullptr, instance_, this);
+  POINT cursor{};
+  ::GetCursorPos(&cursor);
+  MONITORINFO monitor{sizeof(monitor)};
+  ::GetMonitorInfoW(::MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST), &monitor);
+  constexpr int width = 680;
+  constexpr int height = 760;
+  const int x = monitor.rcWork.left + (monitor.rcWork.right - monitor.rcWork.left - width) / 2;
+  const int y = monitor.rcWork.top + (monitor.rcWork.bottom - monitor.rcWork.top - height) / 2;
+  window_ = ::CreateWindowExW(WS_EX_APPWINDOW, class_name, L"Strokes++ Settings",
+                              WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, x, y,
+                              width, height, nullptr, nullptr, instance_, this);
   if (!window_) {
     if (registered != 0) ::UnregisterClassW(class_name, instance_);
     return false;
   }
-  ::ShowWindow(window_, SW_SHOW);
+  ::SetWindowPos(window_, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
+  ::SetForegroundWindow(window_);
+  ::SetActiveWindow(window_);
+  ::SetWindowPos(window_, HWND_NOTOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
   ::UpdateWindow(window_);
   MSG message{};
   while (!finished_ && ::GetMessageW(&message, nullptr, 0, 0) > 0) {
@@ -131,6 +142,10 @@ LRESULT WindowsSettingsWindow::handle_command(WPARAM wp) {
     ::DestroyWindow(window_);
     return 0;
   }
+  if (command == help_id) {
+    show_help();
+    return 0;
+  }
   if (!gestures_ || !profiles_) return 0;
   const std::string previous = gestures_->selected();
   if (gestures_->handle(command, notification)) {
@@ -143,31 +158,34 @@ LRESULT WindowsSettingsWindow::handle_command(WPARAM wp) {
 }
 
 void WindowsSettingsWindow::create_controls() {
-  text(window_, 0, L"Global settings", 16, 12, 220);
+  text(window_, 0, L"Simple settings", 16, 12, 220);
   control(window_, L"BUTTON", L"Gestures enabled", BS_AUTOCHECKBOX, enabled_id, 20, 42, 180, 24);
   text(window_, 0, L"Activation button", 20, 76);
   control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, button_id, 200, 72, 180, 180);
   for (auto* value : {L"Right", L"Middle", L"XButton1", L"XButton2"})
     ::SendDlgItemMessageW(window_, button_id, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(value));
-  text(window_, 0, L"Movement threshold", 20, 110);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, move_id, 200, 106, 100, 24);
-  text(window_, 0, L"Point distance", 20, 144);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, distance_id, 200, 140, 100, 24);
-  text(window_, 0, L"Maximum points", 20, 178);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, max_id, 200, 174, 100, 24);
-  text(window_, 0, L"Recognition threshold", 20, 212);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, threshold_id, 200, 208, 100, 24);
-  control(window_, L"BUTTON", L"Overlay enabled", BS_AUTOCHECKBOX, overlay_id, 20, 246, 180, 24);
-  text(window_, 0, L"Overlay line width", 20, 280);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, width_id, 200, 276, 100, 24);
-  text(window_, 0, L"Overlay opacity (0-1)", 20, 314);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, opacity_id, 200, 310, 100, 24);
+  control(window_, L"BUTTON", L"Overlay enabled", BS_AUTOCHECKBOX, overlay_id, 20, 110, 180, 24);
+  text(window_, 0, L"Overlay line width", 20, 144);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, width_id, 200, 140, 100, 24);
+  text(window_, 0, L"Overlay opacity (0-1)", 20, 178);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, opacity_id, 200, 174, 100, 24);
+
+  text(window_, 0, L"Advanced settings", 16, 212, 220);
+  text(window_, 0, L"Movement threshold", 20, 242);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, move_id, 200, 238, 100, 24);
+  text(window_, 0, L"Point distance", 20, 276);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, distance_id, 200, 272, 100, 24);
+  text(window_, 0, L"Maximum points", 20, 310);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, max_id, 200, 306, 100, 24);
+  text(window_, 0, L"Recognition threshold", 20, 344);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, threshold_id, 200, 340, 100, 24);
 
   gestures_.emplace(window_, instance_, working_);
   profiles_.emplace(window_, working_);
   gestures_->create();
   profiles_->create();
 
+  control(window_, L"BUTTON", L"Help", BS_PUSHBUTTON, help_id, 350, 670, 90, 30);
   control(window_, L"BUTTON", L"Save", BS_DEFPUSHBUTTON, save_id, 450, 670, 90, 30);
   control(window_, L"BUTTON", L"Cancel", BS_PUSHBUTTON, cancel_id, 550, 670, 90, 30);
   ::EnumChildWindows(window_, apply_font,
@@ -182,6 +200,48 @@ void WindowsSettingsWindow::create_controls() {
                    ::MulDiv(bounds.bottom - bounds.top, static_cast<int>(current_dpi_), 96),
                    SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOZORDER);
   }
+}
+
+void WindowsSettingsWindow::show_help() const noexcept {
+  constexpr wchar_t help[] =
+      L"SIMPLE SETTINGS\n\n"
+      L"Gestures enabled\nTurns gesture recognition on or off. Ordinary mouse input should "
+      L"continue to work while this is off.\n\n"
+      L"Activation button\nThe mouse button you hold while drawing a gesture. A short press "
+      L"without enough movement remains an ordinary click.\n\n"
+      L"Overlay enabled\nShows the line you draw while capturing a gesture.\n\n"
+      L"Overlay line width\nThe thickness of the on-screen gesture line, in pixels.\n\n"
+      L"Overlay opacity\nThe visibility of the gesture line from 0 to 1. Lower values are more "
+      L"transparent.\n\n"
+      L"ADVANCED SETTINGS\n\n"
+      L"Movement threshold\nHow far, in pixels at 100% display scaling, the pointer must move "
+      L"before a held activation button becomes a gesture. Higher values make accidental gestures "
+      L"less likely.\n\n"
+      L"Point distance\nThe minimum distance between recorded stroke points. Lower values capture "
+      L"more detail; higher values produce simpler strokes.\n\n"
+      L"Maximum points\nThe largest number of points retained for one gesture. The default is "
+      L"suitable for normal gestures.\n\n"
+      L"Recognition threshold\nThe required similarity from 0 to 1. Higher values are stricter; "
+      L"lower values accept more variation but can increase false matches.\n\n"
+      L"GESTURES AND SHORTCUTS\n\n"
+      L"Gestures lists the shapes you have created and their sample counts. Add creates one, "
+      L"Rename changes its name, Delete removes it, Train records another example, and Remove last "
+      L"sample removes its newest example. Enable / Disable controls whether that gesture can be "
+      L"recognized.\n\n"
+      L"Selected gesture global shortcut is the keyboard shortcut used when no matching application "
+      L"profile overrides it. Enter a shortcut such as CTRL+W or ALT+LEFT, or a sequence such as "
+      L"ALT+SPACE,N, then click Assign.\n\n"
+      L"APPLICATION PROFILES\n\n"
+      L"Profiles let the same gesture perform different shortcuts in different applications. Add, "
+      L"Rename, Delete, and Enable / Disable manage the selected profile.\n\n"
+      L"Match field chooses the application property: process name, window title, or window class. "
+      L"Match mode chooses Exact, Contains, or Regular expression. Match value is the text or pattern "
+      L"to compare. Add criterion adds it to the selected profile; Update criterion edits the selected "
+      L"criterion; Remove criterion deletes it. All criteria in a profile must match.\n\n"
+      L"Override shortcut replaces the global shortcut for the selected gesture when this profile "
+      L"matches. Enter the shortcut and click Assign override.\n\n"
+      L"Save applies all changes. Cancel closes Settings without applying them.";
+  ::MessageBoxW(window_, help, L"Strokes++ Settings Help", MB_OK | MB_ICONINFORMATION);
 }
 
 void WindowsSettingsWindow::rescale_children(UINT old_dpi, UINT new_dpi) noexcept {

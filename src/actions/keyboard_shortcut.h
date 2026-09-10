@@ -61,4 +61,10 @@ struct KeyboardShortcut {
 
 [[nodiscard]] std::optional<KeyboardShortcut> parse_shortcut(std::string_view text);
 
+using KeyboardShortcutSequence = std::vector<KeyboardShortcut>;
+
+/// Parses one or more shortcut chords separated by commas.
+[[nodiscard]] std::optional<KeyboardShortcutSequence> parse_shortcut_sequence(
+    std::string_view text);
+
 }  // namespace strokes::actions

@@ -1,0 +1,3 @@
+#include "resource.h"
+
+IDI_STROKES_PLUS_PLUS ICON "strokes_plus_plus_logo.ico"

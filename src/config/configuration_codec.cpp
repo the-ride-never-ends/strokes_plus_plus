@@ -109,7 +109,7 @@ std::optional<actions::Action> decode_action(const Value& value) {
   const auto* type = field_as<std::string>(*object, "type");
   const auto* shortcut = field_as<std::string>(*object, "shortcut");
   if (type == nullptr || *type != "keyboard" || shortcut == nullptr ||
-      !actions::parse_shortcut(*shortcut)) {
+      !actions::parse_shortcut_sequence(*shortcut)) {
     return std::nullopt;
   }
   return actions::Action{actions::ActionType::keyboard_shortcut, *shortcut};
@@ -148,21 +148,6 @@ bool decode_version(const Object& object, int current_version, int& version) {
   if (!decoded || *decoded != current_version) return false;
   version = *decoded;
   return true;
-}
-
-bool legacy_match(const Object& profile, std::vector<context::MatchCriterion>& criteria) {
-  const auto* encoded_match = field(profile, "match");
-  const auto* match = encoded_match == nullptr ? nullptr : encoded_match->get_if<Object>();
-  if (match == nullptr) return false;
-  for (const auto property :
-       {context::ApplicationProperty::process_name, context::ApplicationProperty::window_title,
-        context::ApplicationProperty::window_class}) {
-    const auto* value = field_as<std::string>(*match, encode_property(property));
-    if (value != nullptr && !value->empty()) {
-      criteria.push_back({property, context::MatchMode::exact, *value});
-    }
-  }
-  return !criteria.empty();
 }
 
 }  // namespace
@@ -462,7 +447,7 @@ DecodeResult<ProfileFile> decode_profiles(const Value& value) {
         }
         decoded.criteria.push_back(std::move(candidate));
       }
-    } else if (!legacy_match(*profile, decoded.criteria)) {
+    } else {
       ++skipped;
     }
     if (const auto* encoded_actions = field(*profile, "actions")) {

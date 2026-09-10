@@ -1,5 +1,9 @@
 #include "engine/gesture_engine.h"
 
+#include <chrono>
+#include <iterator>
+#include <thread>
+
 #include <utility>
 
 #include "actions/keyboard_shortcut.h"
@@ -101,8 +105,16 @@ EngineUpdate GestureEngine::process(const input::MouseInputEvent& event) {
 bool GestureEngine::execute(const actions::Action& action) {
   switch (action.type) {
     case actions::ActionType::keyboard_shortcut:
-      if (const auto shortcut = actions::parse_shortcut(action.value)) {
-        return actions::KeyboardActionExecutor::execute(*shortcut, keyboard_input_);
+      if (const auto sequence = actions::parse_shortcut_sequence(action.value)) {
+        for (auto shortcut = sequence->begin(); shortcut != sequence->end(); ++shortcut) {
+          if (!actions::KeyboardActionExecutor::execute(*shortcut, keyboard_input_)) return false;
+          // SendInput returns before the target application necessarily handles
+          // the chord. Give UI commands such as ALT+SPACE time to open their
+          // menu before injecting the next sequence step.
+          if (std::next(shortcut) != sequence->end())
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        return true;
       }
       return false;
   }

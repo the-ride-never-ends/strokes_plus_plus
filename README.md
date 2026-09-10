@@ -1,5 +1,7 @@
 # Strokes++
 
+![Strokes++ logo](resources/strokes_plus_plus_logo.svg)
+
 A native Windows 11 mouse-gesture application. The MVP runs in the notification area,
 captures configurable global mouse gestures, recognizes trained single-stroke shapes,
 and executes global or application-specific keyboard shortcuts.
@@ -56,4 +58,4 @@ profile matching is unavailable, while title and window-class criteria can still
 
 The application performs no network communication, analytics, cloud synchronization, or
 update checks. Configuration remains under `%LOCALAPPDATA%\StrokesPlusPlus`; structured JSON
-Lines for the current run are written to `logs.txt` beside `GestureEngine.exe`.
+Lines for the current run are written to `log.txt` beside `GestureEngine.exe`.

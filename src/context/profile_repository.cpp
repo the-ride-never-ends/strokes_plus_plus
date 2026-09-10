@@ -11,7 +11,7 @@ namespace {
 
 bool valid_action(const actions::Action& action) {
   return action.type == actions::ActionType::keyboard_shortcut &&
-         actions::parse_shortcut(action.value).has_value();
+         actions::parse_shortcut_sequence(action.value).has_value();
 }
 
 }  // namespace

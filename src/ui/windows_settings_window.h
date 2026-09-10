@@ -24,6 +24,7 @@ class WindowsSettingsWindow final {
   LRESULT handle_command(WPARAM);
   void create_controls();
   void load_values();
+  void show_help() const noexcept;
   [[nodiscard]] bool save_values();
   void rescale_children(UINT old_dpi, UINT new_dpi) noexcept;
   HINSTANCE instance_{};

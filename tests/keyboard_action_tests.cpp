@@ -41,6 +41,12 @@ void parsing_tests() {
   check(shortcut && shortcut->key == VirtualKey::tab, "named shortcut key parses");
   check(actions::parse_shortcut("ALT+LEFT").has_value(), "arrow shortcut parses");
   check(actions::parse_shortcut("WIN+D").has_value(), "Windows-key shortcut parses");
+  const auto sequence = actions::parse_shortcut_sequence("ALT+SPACE, N");
+  check(sequence && sequence->size() == 2 &&
+            sequence->back().key == static_cast<actions::VirtualKey>('N'),
+        "comma-separated shortcut sequences parse");
+  check(!actions::parse_shortcut_sequence("ALT+SPACE,").has_value(),
+        "an empty shortcut-sequence step is rejected");
   check(actions::parse_shortcut("CTRL+F24").has_value(), "function key parses");
   check(!actions::parse_shortcut("CTRL+").has_value(), "empty token is rejected");
   check(!actions::parse_shortcut("CTRL+CTRL+W").has_value(), "duplicate modifier is rejected");

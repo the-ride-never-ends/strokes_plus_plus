@@ -106,4 +106,18 @@ std::optional<KeyboardShortcut> parse_shortcut(std::string_view text) {
   return has_primary_key ? std::optional{std::move(shortcut)} : std::nullopt;
 }
 
+std::optional<KeyboardShortcutSequence> parse_shortcut_sequence(std::string_view text) {
+  KeyboardShortcutSequence sequence;
+  std::size_t start = 0;
+  while (start <= text.size()) {
+    const std::size_t separator = text.find(',', start);
+    auto shortcut = parse_shortcut(text.substr(start, separator - start));
+    if (!shortcut) return std::nullopt;
+    sequence.push_back(std::move(*shortcut));
+    if (separator == std::string_view::npos) break;
+    start = separator + 1;
+  }
+  return sequence.empty() ? std::nullopt : std::optional{std::move(sequence)};
+}
+
 }  // namespace strokes::actions

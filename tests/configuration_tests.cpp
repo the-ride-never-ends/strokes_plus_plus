@@ -115,6 +115,9 @@ void profile_tests() {
   ProfileFile input;
   input.global_actions.emplace("left",
                                actions::Action{actions::ActionType::keyboard_shortcut, "ALT+LEFT"});
+  input.global_actions.emplace("minimize",
+                               actions::Action{actions::ActionType::keyboard_shortcut,
+                                               "ALT+SPACE,N"});
   input.profiles.push_back(
       {"chrome",
        "Chrome",
@@ -129,6 +132,8 @@ void profile_tests() {
   check(result.value->global_actions.at("left").value == "ALT+LEFT" &&
             result.value->profiles[0].actions_by_gesture.at("left").value == "CTRL+SHIFT+TAB",
         "global and profile actions are retained");
+  check(result.value->global_actions.at("minimize").value == "ALT+SPACE,N",
+        "the minimize shortcut round trips as an ordinary editable shortcut");
   auto mixed = encode(input);
   mixed.get_if<json::Object>()->at("profiles").get_if<json::Array>()->push_back(false);
   result = decode_profiles(mixed);
@@ -151,24 +156,12 @@ void profile_tests() {
             result.value->profiles.front().criteria.empty() && !result.warning.empty(),
         "malformed profile fields retain the disabled parent record");
 
-  const auto documented = json::parse(R"({
-        "profiles": [{
-            "id": "chrome", "name": "Google Chrome",
-            "match": {"process": "chrome.exe"},
-            "actions": {"left": {"type": "keyboard", "shortcut": "CTRL+SHIFT+TAB"}}
-        }],
-        "global_actions": {"left": {"type": "keyboard", "shortcut": "ALT+LEFT"}}
-    })");
-  check(static_cast<bool>(documented), "documented profile configuration is valid JSON");
-  if (!documented) return;
-  const auto documented_result = decode_profiles(*documented.value);
-  check(documented_result && documented_result.value->profiles.size() == 1 &&
-            documented_result.value->profiles[0].criteria.size() == 1,
-        "documented legacy profile configuration loads as an exact process match");
 }
 }  // namespace
 
 void run_configuration_tests() {
+  check(config::GlobalOptions{}.gestures_enabled,
+        "a fresh application starts with gestures enabled");
   global_tests();
   gesture_tests();
   profile_tests();

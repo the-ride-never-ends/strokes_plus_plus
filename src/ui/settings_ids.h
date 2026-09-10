@@ -40,6 +40,7 @@ enum : int {
   profile_toggle_id,
   profile_assign_id,
   global_assign_id,
+  help_id,
   save_id,
   cancel_id
 };

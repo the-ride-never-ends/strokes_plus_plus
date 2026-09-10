@@ -4,13 +4,78 @@ All notable changes to Strokes++ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The project does not yet have a versioned release.
 
+## [0.7.0]
+
+### Added
+
+- Added a universal `Minimize` gesture, drawn diagonally from the top right to the bottom left,
+  with an action that can be changed or cleared in Settings like any other global gesture mapping.
+- Added comma-separated shortcut sequences, such as `ALT+SPACE,N`, for actions that require more
+  than one key chord.
+- Added a default `Maximize` gesture, drawn diagonally from the bottom left to the upper right,
+  with an editable `WIN+UP` global shortcut.
+
+### Changed
+
+- Changed the default Minimize action from `WIN+DOWN`, which only restores a maximized window on
+  its first invocation, to `ALT+SPACE,N`, which fully minimizes normal and maximized windows.
+- Added a short pause between shortcut-sequence steps so the target application can process each
+  chord before the next one is sent.
+
+### Known Issues
+
+- The `ALT+SPACE,N` MVP implementation briefly displays the active window's system menu and can
+  exhibit minor timing slippage between opening the menu and sending `N`. A menu-free native
+  minimize action may replace it after the MVP.
+
+### Tests
+
+- Added coverage for configurable minimize and maximize shortcuts, comma-separated shortcut
+  parsing, and both direction-sensitive diagonal gesture pipelines.
+
+## [0.6.0]
+
+### Changed
+
+- Made a right-click on the notification-area icon toggle gesture processing directly and display
+  a grayscale icon while gestures are disabled; the command menu now opens with a left-click.
+- Write the current run's `log.txt` to the application's launch directory, falling back to the
+  executable directory when the launch directory is not writable, and continue truncating it at
+  startup.
+- Added a Help button to Settings with plain-language explanations of every global option, gesture
+  control, shortcut assignment, application profile, and matching criterion.
+- Reorganized Settings into Simple user-facing controls and Advanced recognition and stroke-sampling
+  controls that expose implementation details.
+
+### Fixed
+
+- Prevented notification-area callbacks from opening Settings reentrantly while its modal message
+  loop is active, and dispatch menu commands only after the popup menu closes, so Settings opens
+  reliably on the first request.
+- Place Settings explicitly within the active monitor's work area and briefly promote it above
+  other windows while it is shown.
+- Start each application process with gesture handling enabled, regardless of the previous run's
+  temporary tray-disabled state.
+- Exclude notification-area and taskbar clicks from gesture suppression so the tray menu remains
+  accessible while gesture handling is enabled.
+- Preserve the DPI-scaled Settings window dimensions when bringing it forward, preventing the
+  right-side editors and bottom buttons from being clipped outside the client area.
+
+### Tests
+
+- Added Windows regressions for the shell callback mapping and for creating, displaying, closing,
+  and leaving the modal loop of the Settings window, including containment checks for every visible
+  child control.
+- Added regressions for enabled-by-default startup and complete left-button pass-through while
+  right-button gestures are enabled.
+
 ## [0.5.0]
 
 ### Changed
 
-- Replaced the generic Windows notification-area glyphs with a distinct Strokes++ gesture icon
-  whose color reflects whether gesture handling is enabled.
-- Moved the runtime log to `logs.txt` beside the application executable and truncate it at startup
+- Replaced the generic Windows notification-area glyphs with the Strokes++ logo and embedded it as
+  the executable's native Windows icon resource.
+- Moved the runtime log to `log.txt` beside the application executable and truncate it at startup
   so each run contains only its own structured events.
 
 ### Fixed
@@ -24,7 +89,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Tests
 
-- Added regressions for discarding queued event-pump items and truncating logs between sessions.
+- Added regressions for discarding queued event-pump items and truncating log between sessions.
 
 ## [0.4.0]
 
@@ -128,7 +193,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   points, rejected the transparent black overlay color, and balanced partial mouse injection.
 - Corrected new-gesture shortcut state and made clearing a shortcut consistent between Assign and
   Save; malformed profile action collections now discard only those actions.
-- Rotated logs during long-running sessions, retained every quarantined configuration revision,
+- Rotated log during long-running sessions, retained every quarantined configuration revision,
   retried tray-icon registration, unregistered the trainer window class, rounded replay coordinates,
   and documented elevated-process profile-matching limits.
 - Unified keyboard balance ownership in the executor, handled the right Windows key independently,
@@ -138,7 +203,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Accepted the partial configuration examples in MVP.md, validated shortcuts and regular expressions at decode time, and retained valid gestures when individual templates are malformed.
 - Restored an ordinary activation-button click at its original press position without freezing cursor movement, and safely cancelled malformed active input sequences.
 - Balanced partial keyboard injection failures and temporarily neutralized unrelated held modifiers before restoring the user's physical modifier state.
-- Bounded JSON nesting, emitted compact round-trip-safe numbers, rotated oversized logs, and delayed gesture-start logging until capture actually begins.
+- Bounded JSON nesting, emitted compact round-trip-safe numbers, rotated oversized log, and delayed gesture-start logging until capture actually begins.
 - Made Escape suppression survive hook shutdown until the corresponding key-up, and limited Win32 class cleanup to classes registered by the owning component.
 - Reported startup integration failures visibly and isolated the executable idle test from the user's real configuration directory.
 
@@ -189,7 +254,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Thread-safe JSON Lines logging under Local AppData for application, configuration, hook, gesture, recognition, and action lifecycle events.
 - Minimal RAII low-level keyboard hook for Escape cancellation, including injected-key filtering and balanced suppression of Escape down/up events.
 - Native settings window for engine, recognition, activation-button, overlay, and default global-action configuration with validation, atomic persistence, and live worker reload.
-- Persistence of tray enable/disable changes and matched-profile identity/source in action logs.
+- Persistence of tray enable/disable changes and matched-profile identity/source in action log.
 - Native gesture library controls for creation, rename, deletion, live single-stroke training/preview, multiple samples, and automatic post-training enablement.
 - Native application-profile creation/deletion with process matching plus selected-gesture global and profile-specific shortcut assignment.
 - Explicit gesture enable/disable controls and profile rename/process-update controls.

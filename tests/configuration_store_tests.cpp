@@ -35,9 +35,16 @@ void creation_and_persistence() {
             std::filesystem::exists(temp.path / "gestures.json") &&
             std::filesystem::exists(temp.path / "profiles.json"),
         "all three configuration files are created");
+  check(loaded.value->gestures.gestures.size() == 3 &&
+            loaded.value->gestures.gestures[1].id == "minimize" &&
+            loaded.value->gestures.gestures[2].id == "maximize" &&
+            loaded.value->profiles.global_actions.at("minimize").value == "ALT+SPACE,N" &&
+            loaded.value->profiles.global_actions.at("maximize").value == "WIN+UP",
+        "defaults include editable diagonal minimize and maximize gestures");
   loaded.value->global.gestures_enabled = false;
   loaded.value->global.movement_threshold = 17;
   loaded.value->profiles.global_actions.at("right").value = "CTRL+W";
+  loaded.value->profiles.global_actions.at("minimize").value = "ALT+F9";
   std::string error;
   loaded.value->gestures.gestures.push_back(
       {"down", "Down", true, {{"down-1", {{4, 2}, {4, 20}}}}});
@@ -54,8 +61,10 @@ void creation_and_persistence() {
         "global options persist across reload");
   check(reloaded && reloaded.value->profiles.global_actions.at("right").value == "CTRL+W",
         "action mappings persist across reload");
-  check(reloaded && reloaded.value->gestures.gestures.size() == 2 &&
-            reloaded.value->gestures.gestures[1].templates[0].points.size() == 2,
+  check(reloaded && reloaded.value->profiles.global_actions.at("minimize").value == "ALT+F9",
+        "the minimize gesture shortcut remains user-configurable across reloads");
+  check(reloaded && reloaded.value->gestures.gestures.size() == 4 &&
+            reloaded.value->gestures.gestures[3].templates[0].points.size() == 2,
         "gesture definitions and templates persist across reload");
   check(reloaded && reloaded.value->profiles.profiles.size() == 1 &&
             reloaded.value->profiles.profiles[0].actions_by_gesture.at("down").value == "CTRL+S",
@@ -78,7 +87,7 @@ void malformed_and_recovery() {
   auto bad = store.load();
   check(bad && bad.warnings.find("config.json") != std::string::npos,
         "malformed global configuration is quarantined and reported");
-  check(bad && bad.value->gestures.gestures.size() == 2,
+  check(bad && bad.value->gestures.gestures.size() == 4,
         "malformed global configuration does not discard valid gestures");
   check(std::filesystem::exists(temp.path / "config.json.invalid"),
         "malformed global configuration is preserved for recovery");

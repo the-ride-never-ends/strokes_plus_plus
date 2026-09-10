@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Ruby red S arrow with two plus symbols</title>
+  <desc id="desc">A thick curved S-like arrow sweeping down and left, with a circular dot above the upper curve and two matching bold plus signs side by side on the upper right.</desc>
+
+  <!-- Transparent background -->
+  <g fill="#E0115F" stroke="#E0115F">
+    <!-- Rounded S-like sweep -->
+    <path
+      d="M205 48
+         C128 42 74 72 58 119
+         C38 178 74 225 127 244
+         C151 253 176 255 200 258
+         C278 267 318 302 318 354
+         C318 415 271 453 190 460"
+      fill="none"
+      stroke-width="32"
+      stroke-linecap="round"
+      stroke-linejoin="round"/>
+
+    <!-- Down-left arrowhead -->
+    <path d="M42 469 L214 404 L203 447 L217 492 Z" stroke="none"/>
+
+    <!-- Dot near upper curve -->
+    <circle cx="226" cy="46" r="46" stroke="none"/>
+
+    <!-- Two matching plus signs, aligned side by side -->
+    <path d="M292 105 H328 V149 H372 V185 H328 V229 H292 V185 H248 V149 H292 Z" stroke="none"/>
+    <path d="M428 105 H464 V149 H508 V185 H464 V229 H428 V185 H384 V149 H428 Z" stroke="none"/>
+  </g>
+</svg>

@@ -63,12 +63,17 @@ class EngineHost {
     }
     configuration_directory_ = *directory;
     refresh_scale(::GetForegroundWindow());
-    const auto log_path = has_directory_override ? *directory / "logs.txt"
-                                                 : application_directory() / "logs.txt";
+    auto log_path = has_directory_override ? *directory / "log.txt"
+                                           : std::filesystem::current_path() / "log.txt";
     logger_ = std::make_unique<logging::StructuredLogger>(
         log_path, logging::StructuredLogger::OpenMode::truncate);
+    if (!logger_->ready() && !has_directory_override) {
+      log_path = application_directory() / "log.txt";
+      logger_ = std::make_unique<logging::StructuredLogger>(
+          log_path, logging::StructuredLogger::OpenMode::truncate);
+    }
     if (!logger_->ready()) {
-      startup_error_ = "Logging could not be started. The application will continue without logs.";
+      startup_error_ = "Logging could not be started. The application will continue without log.";
     }
     (void)logger_->log("application_start");
     config::ConfigurationStore store(*directory);
@@ -82,6 +87,8 @@ class EngineHost {
       startup_error_ = loaded.error + "\n\nDefaults will be used for this session.";
       (void)logger_->log("configuration_error", {{"message", loaded.error}});
     }
+    // Disabling is a per-run convenience; every new process starts enabled.
+    configuration_.global.gestures_enabled = true;
     (void)logger_->log("configuration_load", {{"used_defaults", !loaded}});
     recognizer_.set_threshold(configuration_.global.recognition_threshold);
     for (const auto& gesture : configuration_.gestures.gestures) {
@@ -250,6 +257,18 @@ class EngineHost {
 
   static bool handle_mouse(const input::MouseInputEvent& event, void* context) noexcept {
     auto& host = *static_cast<EngineHost*>(context);
+    if (event.type == input::MouseEventType::button_down ||
+        event.type == input::MouseEventType::button_up) {
+      POINT point{static_cast<LONG>(event.position.x), static_cast<LONG>(event.position.y)};
+      HWND target = ::GetAncestor(::WindowFromPoint(point), GA_ROOT);
+      wchar_t class_name[64]{};
+      if (target != nullptr) ::GetClassNameW(target, class_name, 64);
+      if (::lstrcmpW(class_name, L"Shell_TrayWnd") == 0 ||
+          ::lstrcmpW(class_name, L"Shell_SecondaryTrayWnd") == 0 ||
+          ::lstrcmpW(class_name, L"NotifyIconOverflowWindow") == 0) {
+        return false;
+      }
+    }
     return host.router_.route(event).suppress_input;
   }
 
@@ -266,7 +285,13 @@ class EngineHost {
   static void handle_tray(tray::TrayCommand command, void* context) noexcept {
     auto& host = *static_cast<EngineHost*>(context);
     try {
-      if (command == tray::TrayCommand::enable) {
+      if (command == tray::TrayCommand::toggle) {
+        const bool enabled = !host.configuration_.global.gestures_enabled;
+        host.router_.set_enabled(enabled);
+        host.tray_.set_enabled(enabled);
+        host.configuration_.global.gestures_enabled = enabled;
+        host.save_configuration();
+      } else if (command == tray::TrayCommand::enable) {
         host.router_.set_enabled(true);
         host.tray_.set_enabled(true);
         host.configuration_.global.gestures_enabled = true;
@@ -365,6 +390,9 @@ class EngineHost {
   }
 
   void open_settings() noexcept {
+    if (settings_open_) return;
+    settings_open_ = true;
+    if (logger_) (void)logger_->log("settings_open_requested");
     try {
       router_.set_enabled(false);
       worker_.request_stop();
@@ -375,7 +403,9 @@ class EngineHost {
       flush_saves();
 
       ui::WindowsSettingsWindow settings;
-      if (settings.show(instance_, configuration_)) {
+      const bool accepted = settings.show(instance_, configuration_);
+      if (logger_) (void)logger_->log("settings_closed", {{"accepted", accepted}});
+      if (accepted) {
         std::string error;
         config::ConfigurationStore store(configuration_directory_);
         if (!store.save(configuration_, error)) {
@@ -397,11 +427,18 @@ class EngineHost {
       router_.set_enabled(configuration_.global.gestures_enabled);
       tray_.set_enabled(configuration_.global.gestures_enabled);
       restart_engine();
+    } catch (const std::exception& exception) {
+      if (logger_) (void)logger_->log("settings_error", {{"message", exception.what()}});
+      ::MessageBoxW(nullptr, L"Settings could not be applied.", L"Strokes++", MB_OK | MB_ICONERROR);
+      router_.set_enabled(configuration_.global.gestures_enabled);
+      restart_engine();
     } catch (...) {
+      if (logger_) (void)logger_->log("settings_error");
       ::MessageBoxW(nullptr, L"Settings could not be applied.", L"Strokes++", MB_OK | MB_ICONERROR);
       router_.set_enabled(configuration_.global.gestures_enabled);
       restart_engine();
     }
+    settings_open_ = false;
   }
 
   void restart_engine() noexcept {
@@ -479,6 +516,7 @@ class EngineHost {
   std::unique_ptr<logging::StructuredLogger> logger_;
   bool ready_{true};
   bool input_suspended_{};
+  bool settings_open_{};
   std::string startup_error_;
   std::atomic<double> threshold_scale_{1.0};
   HWINEVENTHOOK foreground_hook_{};

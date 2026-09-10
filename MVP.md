@@ -1028,9 +1028,14 @@ Example:
     {
       "id": "chrome",
       "name": "Google Chrome",
-      "match": {
-        "process": "chrome.exe"
-      },
+      "enabled": true,
+      "criteria": [
+        {
+          "property": "process",
+          "mode": "exact",
+          "value": "chrome.exe"
+        }
+      ],
       "actions": {
         "left": {
           "type": "keyboard",
@@ -1269,7 +1274,7 @@ application shutdown
 
 Mouse movement events should not normally be logged individually.
 
-Logs should be stored under the user's application data directory.
+log should be stored under the user's application data directory.
 
 ---
 

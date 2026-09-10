@@ -50,9 +50,11 @@ class FakeClick final : public IMouseClick {
 class FakeKeyboard final : public IKeyboardInput {
  public:
   std::vector<KeyEvent> events;
+  int sends{};
   bool result{true};
   bool is_key_down(VirtualKey) const override { return false; }
   bool send(std::span<const KeyEvent> value) override {
+    ++sends;
     events.assign(value.begin(), value.end());
     return result;
   }
@@ -129,6 +131,39 @@ void global_action_pipeline() {
   check(result.action_attempted && result.action_succeeded, "resolved keyboard action executes");
   check(fixture.keyboard.events.size() == 4, "keyboard action emits its complete key sequence");
   check(engine.state() == GestureState::idle, "action pipeline finishes idle");
+}
+
+void universal_minimize_pipeline() {
+  Fixture fixture;
+  (void)fixture.recognizer.add_gesture(
+      {"minimize", "Minimize", true, {{"sample", {{100, 0}, {50, 50}, {0, 100}}}}});
+  fixture.globals.emplace("minimize",
+                          Action{ActionType::keyboard_shortcut, "ALT+SPACE,N"});
+  auto engine = fixture.engine();
+  (void)engine.process(mouse(MouseEventType::button_down, 100, 0));
+  (void)engine.process(mouse(MouseEventType::pointer_moved, 50, 50));
+  const auto result = engine.process(mouse(MouseEventType::button_up, 0, 100));
+  check(result.recognition && result.recognition->gesture_id == "minimize" &&
+            result.action_succeeded && fixture.keyboard.sends == 2 &&
+            fixture.keyboard.events.size() == 2 &&
+            fixture.keyboard.events[0].key == static_cast<VirtualKey>('N'),
+        "top-right to bottom-left gesture executes its configurable minimize shortcut");
+}
+
+void universal_maximize_pipeline() {
+  Fixture fixture;
+  (void)fixture.recognizer.add_gesture(
+      {"maximize", "Maximize", true, {{"sample", {{0, 100}, {50, 50}, {100, 0}}}}});
+  fixture.globals.emplace("maximize", Action{ActionType::keyboard_shortcut, "WIN+UP"});
+  auto engine = fixture.engine();
+  (void)engine.process(mouse(MouseEventType::button_down, 0, 100));
+  (void)engine.process(mouse(MouseEventType::pointer_moved, 50, 50));
+  const auto result = engine.process(mouse(MouseEventType::button_up, 100, 0));
+  check(result.recognition && result.recognition->gesture_id == "maximize" &&
+            result.action_succeeded && fixture.keyboard.events.size() == 4 &&
+            fixture.keyboard.events[0].key == VirtualKey::left_windows &&
+            fixture.keyboard.events[1].key == VirtualKey::up,
+        "bottom-left to top-right gesture executes its configurable maximize shortcut");
 }
 
 void profile_override_and_context_snapshot() {
@@ -292,6 +327,8 @@ void router_engine_feedback_integration() {
 void run_gesture_engine_tests() {
   ordinary_click_pipeline();
   global_action_pipeline();
+  universal_minimize_pipeline();
+  universal_maximize_pipeline();
   profile_override_and_context_snapshot();
   no_match_executes_nothing();
   disabled_feedback_does_not_disable_recognition();

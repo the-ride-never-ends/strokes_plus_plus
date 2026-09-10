@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(strokes_plus_plus VERSION 0.5.0 LANGUAGES CXX)
+project(strokes_plus_plus VERSION 0.6.0 LANGUAGES CXX)
 
 option(STROKES_BUILD_TESTS "Build the unit tests" ON)
 
@@ -55,7 +55,10 @@ if(WIN32)
         target_compile_options(strokes_windows PRIVATE /W4 /permissive- /EHsc)
     endif()
 
-    add_executable(GestureEngine WIN32 src/app/main.cpp)
+    add_executable(GestureEngine WIN32
+        src/app/main.cpp
+        resources/strokes_plus_plus.rc
+    )
     target_link_libraries(GestureEngine PRIVATE strokes_windows psapi)
     target_compile_features(GestureEngine PRIVATE cxx_std_20)
     if(MSVC)
@@ -101,7 +104,10 @@ if(STROKES_BUILD_TESTS)
     add_test(NAME strokes_performance_tests COMMAND strokes_performance_tests)
     set_tests_properties(strokes_performance_tests PROPERTIES LABELS performance)
     if(WIN32)
-        add_executable(strokes_windows_smoke_tests tests/windows_smoke_tests.cpp)
+        add_executable(strokes_windows_smoke_tests
+            tests/windows_smoke_tests.cpp
+            resources/strokes_plus_plus.rc
+        )
         target_link_libraries(strokes_windows_smoke_tests PRIVATE strokes_windows)
         target_compile_features(strokes_windows_smoke_tests PRIVATE cxx_std_20)
         if(MSVC)

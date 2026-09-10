@@ -360,6 +360,20 @@ ConfigurationBundle ConfigurationStore::defaults() {
       {"right", "Right", true, {{"default-right", {{0, 0}, {30, 0}, {60, 0}, {100, 0}}}}});
   result.profiles.global_actions.emplace(
       "right", actions::Action{actions::ActionType::keyboard_shortcut, "ALT+RIGHT"});
+  result.gestures.gestures.push_back(
+      {"minimize",
+       "Minimize",
+       true,
+       {{"default-minimize", {{100, 0}, {75, 25}, {50, 50}, {25, 75}, {0, 100}}}}});
+  result.profiles.global_actions.emplace(
+      "minimize", actions::Action{actions::ActionType::keyboard_shortcut, "ALT+SPACE,N"});
+  result.gestures.gestures.push_back(
+      {"maximize",
+       "Maximize",
+       true,
+       {{"default-maximize", {{0, 100}, {25, 75}, {50, 50}, {75, 25}, {100, 0}}}}});
+  result.profiles.global_actions.emplace(
+      "maximize", actions::Action{actions::ActionType::keyboard_shortcut, "WIN+UP"});
   return result;
 }
 

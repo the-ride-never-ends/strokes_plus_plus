@@ -3,8 +3,11 @@
 #define NOMINMAX
 #include <Windows.h>
 
+#include <optional>
+
 namespace strokes::tray {
-enum class TrayCommand { enable, disable, settings, suspend, resume, exit };
+enum class TrayCommand { toggle, enable, disable, settings, suspend, resume, exit };
+enum class TrayClick { show_menu, toggle };
 
 /// Owns the notification-area icon and dispatches lifecycle commands.
 class WindowsTrayIcon final {
@@ -17,6 +20,7 @@ class WindowsTrayIcon final {
   [[nodiscard]] bool create(HINSTANCE instance, Handler handler, void* context = nullptr);
   void destroy() noexcept;
   void set_enabled(bool enabled) noexcept;
+  [[nodiscard]] static std::optional<TrayClick> click_for_callback(UINT event) noexcept;
 
  private:
   static LRESULT CALLBACK window_proc(HWND, UINT, WPARAM, LPARAM);
@@ -31,7 +35,8 @@ class WindowsTrayIcon final {
   bool enabled_{true};
   bool class_registered_{};
   UINT taskbar_created_{};
-  HICON enabled_icon_{};
+  HICON logo_icon_{};
   HICON disabled_icon_{};
+  bool owns_logo_icon_{};
 };
 }  // namespace strokes::tray

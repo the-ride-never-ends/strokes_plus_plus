@@ -57,6 +57,20 @@ void gesture_and_unrelated_routing() {
   check(delivered.size() == 3, "gesture routes down, qualifying move, and up");
 }
 
+void enabled_left_click_passes_through() {
+  int deliveries = 0;
+  MouseInputRouter router({ActivationButton::right, 8.0}, [&](const auto&) {
+    ++deliveries;
+    return true;
+  });
+  const auto down =
+      router.route(event(MouseEventType::button_down, 10, 10, ActivationButton::left));
+  const auto up = router.route(event(MouseEventType::button_up, 10, 10, ActivationButton::left));
+  check(!down.suppress_input && !up.suppress_input && deliveries == 0 &&
+            !router.interaction_active(),
+        "enabled right-button gestures never suppress or consume a left click");
+}
+
 void disabled_and_saturated_behavior() {
   MouseInputRouter disabled([](const auto&) { return true; });
   disabled.set_enabled(false);
@@ -159,6 +173,7 @@ void dpi_scaled_thresholds() {
 void run_mouse_input_router_tests() {
   click_routing();
   gesture_and_unrelated_routing();
+  enabled_left_click_passes_through();
   disabled_and_saturated_behavior();
   disable_during_capture();
   explicit_cancellation();

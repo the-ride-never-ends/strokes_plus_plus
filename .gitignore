@@ -56,3 +56,5 @@ TestResults/
 .DS_Store
 Thumbs.db
 deprecated/
+
+log.txt

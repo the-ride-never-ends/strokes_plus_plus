@@ -53,13 +53,13 @@ void ProfileEditor::create() {
           26);
   control(window_, L"BUTTON", L"Assign override", BS_PUSHBUTTON, profile_assign_id, 500, 606, 140,
           26);
-  text(window_, 0, L"Selected profile criteria", 20, 390, 220);
-  control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, profile_criteria_id, 20, 416, 340,
+  text(window_, 0, L"Selected profile criteria", 20, 424, 220);
+  control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, profile_criteria_id, 20, 450, 340,
           100);
-  control(window_, L"BUTTON", L"Add criterion", BS_PUSHBUTTON, criterion_add_id, 20, 522, 100, 26);
-  control(window_, L"BUTTON", L"Update criterion", BS_PUSHBUTTON, criterion_update_id, 124, 522,
+  control(window_, L"BUTTON", L"Add criterion", BS_PUSHBUTTON, criterion_add_id, 20, 556, 100, 26);
+  control(window_, L"BUTTON", L"Update criterion", BS_PUSHBUTTON, criterion_update_id, 124, 556,
           108, 26);
-  control(window_, L"BUTTON", L"Remove criterion", BS_PUSHBUTTON, criterion_remove_id, 236, 522,
+  control(window_, L"BUTTON", L"Remove criterion", BS_PUSHBUTTON, criterion_remove_id, 236, 556,
           108, 26);
 }
 
@@ -315,7 +315,7 @@ void ProfileEditor::assign(const std::string& gesture_id) {
     (void)repository.remove_action(profile_id, gesture_id);
     return;
   }
-  if (!actions::parse_shortcut(shortcut)) {
+  if (!actions::parse_shortcut_sequence(shortcut)) {
     ::MessageBoxW(window_, L"The override shortcut is invalid.", L"Strokes++",
                   MB_OK | MB_ICONERROR);
     return;

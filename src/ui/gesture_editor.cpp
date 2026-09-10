@@ -17,9 +17,9 @@ using detail::text;
 using detail::wide;
 
 void GestureEditor::create() {
-  text(window_, 0, L"Selected gesture global shortcut", 20, 348);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, shortcut_id, 230, 344, 110, 24);
-  control(window_, L"BUTTON", L"Assign", BS_PUSHBUTTON, global_assign_id, 344, 344, 60, 24);
+  text(window_, 0, L"Selected gesture global shortcut", 20, 380);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, shortcut_id, 230, 376, 110, 24);
+  control(window_, L"BUTTON", L"Assign", BS_PUSHBUTTON, global_assign_id, 344, 376, 60, 24);
   text(window_, 0, L"Gestures", 410, 12);
   control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, gestures_id, 400, 38, 220, 150);
   control(window_, L"EDIT", L"", ES_AUTOHSCROLL, gesture_name_id, 400, 194, 220, 24);
@@ -101,6 +101,8 @@ void GestureEditor::load() {
                     action == configuration_->profiles.global_actions.end()
                         ? L""
                         : wide(action->second.value).c_str());
+  ::EnableWindow(::GetDlgItem(window_, shortcut_id), TRUE);
+  ::EnableWindow(::GetDlgItem(window_, global_assign_id), TRUE);
 }
 
 void GestureEditor::add() {
@@ -205,7 +207,7 @@ void GestureEditor::assign() {
     configuration_->profiles.global_actions.erase(gesture_id);
     return;
   }
-  if (!actions::parse_shortcut(shortcut)) {
+  if (!actions::parse_shortcut_sequence(shortcut)) {
     ::MessageBoxW(window_, L"The shortcut is invalid.", L"Strokes++", MB_OK | MB_ICONERROR);
     return;
   }
@@ -222,7 +224,7 @@ bool GestureEditor::save(config::ConfigurationBundle& target) const {
       return false;
     }
   }
-  if (!shortcut.empty() && !actions::parse_shortcut(shortcut)) {
+  if (!shortcut.empty() && !actions::parse_shortcut_sequence(shortcut)) {
     ::MessageBoxW(window_, L"The global shortcut is invalid.", L"Strokes++", MB_OK | MB_ICONERROR);
     return false;
   }
