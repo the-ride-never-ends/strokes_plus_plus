@@ -24,11 +24,15 @@ std::optional<gestures::Stroke> WindowsGestureTrainer::capture(HINSTANCE instanc
   wc.lpszClassName = class_name;
   wc.hCursor = ::LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
   wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-  if (::RegisterClassExW(&wc) == 0 && ::GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return {};
+  const ATOM registered = ::RegisterClassExW(&wc);
+  if (registered == 0 && ::GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return {};
   window_ = ::CreateWindowExW(WS_EX_APPWINDOW, class_name, L"Draw Gesture - Escape to Cancel",
                               WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT,
                               600, 460, nullptr, nullptr, instance_, this);
-  if (!window_) return {};
+  if (!window_) {
+    if (registered != 0) ::UnregisterClassW(class_name, instance_);
+    return {};
+  }
   ::SendMessageW(window_, WM_SETFONT, reinterpret_cast<WPARAM>(::GetStockObject(DEFAULT_GUI_FONT)),
                  TRUE);
   ::ShowWindow(window_, SW_SHOW);
@@ -39,7 +43,9 @@ std::optional<gestures::Stroke> WindowsGestureTrainer::capture(HINSTANCE instanc
     ::DispatchMessageW(&message);
   }
   if (message.message == WM_QUIT) ::PostQuitMessage(static_cast<int>(message.wParam));
-  return accepted_ ? std::optional{std::move(points_)} : std::nullopt;
+  const auto result = accepted_ ? std::optional{std::move(points_)} : std::nullopt;
+  if (registered != 0) ::UnregisterClassW(class_name, instance_);
+  return result;
 }
 
 LRESULT CALLBACK WindowsGestureTrainer::window_proc(HWND window, UINT message, WPARAM wp,

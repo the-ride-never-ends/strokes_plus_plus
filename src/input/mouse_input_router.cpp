@@ -57,10 +57,11 @@ MouseRouteResult MouseInputRouter::route(const MouseInputEvent& event) {
   }
 
   if (event.type == MouseEventType::pointer_moved) {
-    const double movement =
-        std::hypot(event.position.x - start_position_.x, event.position.y - start_position_.y);
-    if (movement < active_movement_threshold_) {
-      return {};
+    if (!capturing_) {
+      const double movement =
+          std::hypot(event.position.x - start_position_.x, event.position.y - start_position_.y);
+      if (movement < active_movement_threshold_) return {};
+      capturing_ = true;
     }
     const bool delivered = deliver(event);
     return {.suppress_input = false, .event_delivered = delivered};
@@ -113,6 +114,9 @@ bool MouseInputRouter::cancel_interaction() noexcept {
 
 bool MouseInputRouter::deliver(const MouseInputEvent& event) { return sink_(event); }
 
-void MouseInputRouter::clear_interaction() noexcept { interaction_active_ = false; }
+void MouseInputRouter::clear_interaction() noexcept {
+  interaction_active_ = false;
+  capturing_ = false;
+}
 
 }  // namespace strokes::input

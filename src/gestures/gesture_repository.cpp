@@ -36,7 +36,7 @@ bool GestureRepository::erase(const std::string& id) { return detail::erase_id(g
 
 bool GestureRepository::add_template(const std::string& id, GestureTemplate value) {
   auto* gesture = find(id);
-  if (gesture == nullptr || value.id.empty() || !StrokeNormalizer{}.normalize(value.points) ||
+  if (gesture == nullptr || value.id.empty() || !normalizer_.normalize(value.points) ||
       std::ranges::any_of(gesture->templates, [&](const auto& gesture_template) {
         return gesture_template.id == value.id;
       })) {

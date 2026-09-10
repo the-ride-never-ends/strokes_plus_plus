@@ -140,7 +140,6 @@ int main() {
   strokes::tests::run_configuration_store_tests();
   strokes::tests::run_logging_tests();
   strokes::tests::run_repository_tests();
-  strokes::tests::run_performance_tests();
 
   if (strokes::tests::failures != 0) {
     std::cerr << strokes::tests::failures << " test(s) failed\n";

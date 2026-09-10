@@ -86,6 +86,12 @@ void held_modifier_and_failure_tests() {
   check(shifted.sent_events.front() == KeyEvent{VirtualKey::shift, false} &&
             shifted.sent_events.back() == KeyEvent{VirtualKey::shift, true},
         "unrelated held modifier is neutralized and restored around the shortcut");
+
+  FakeKeyboardInput right_windows;
+  right_windows.held_keys.push_back(VirtualKey::right_windows);
+  check(control_w && KeyboardActionExecutor::execute(*control_w, right_windows) &&
+            right_windows.sent_events.front() == KeyEvent{VirtualKey::right_windows, false},
+        "the right Windows key is neutralized independently");
 }
 
 }  // namespace

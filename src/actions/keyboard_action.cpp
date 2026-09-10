@@ -3,10 +3,22 @@
 #include <algorithm>
 
 namespace strokes::actions {
+namespace {
+void append_restores(std::vector<KeyEvent>& events,
+                     const std::vector<VirtualKey>& injected,
+                     const std::vector<VirtualKey>& neutralized, IKeyboardInput& input) {
+  for (auto modifier = injected.rbegin(); modifier != injected.rend(); ++modifier)
+    events.push_back({*modifier, false});
+  for (auto modifier = neutralized.rbegin(); modifier != neutralized.rend(); ++modifier) {
+    if (input.is_key_down(*modifier)) events.push_back({*modifier, true});
+  }
+}
+}  // namespace
 
 bool KeyboardActionExecutor::execute(const KeyboardShortcut& shortcut, IKeyboardInput& input) {
   static constexpr VirtualKey all_modifiers[]{VirtualKey::control, VirtualKey::shift,
-                                              VirtualKey::alt, VirtualKey::left_windows};
+                                              VirtualKey::alt, VirtualKey::left_windows,
+                                              VirtualKey::right_windows};
   std::vector<VirtualKey> injected_modifiers;
   std::vector<VirtualKey> neutralized_modifiers;
   std::vector<KeyEvent> events;
@@ -29,26 +41,12 @@ bool KeyboardActionExecutor::execute(const KeyboardShortcut& shortcut, IKeyboard
   }
   events.push_back({shortcut.key, true});
   events.push_back({shortcut.key, false});
-  for (auto modifier = injected_modifiers.rbegin(); modifier != injected_modifiers.rend();
-       ++modifier) {
-    events.push_back({*modifier, false});
-  }
-  for (auto modifier = neutralized_modifiers.rbegin(); modifier != neutralized_modifiers.rend();
-       ++modifier) {
-    events.push_back({*modifier, true});
-  }
+  append_restores(events, injected_modifiers, neutralized_modifiers, input);
   if (input.send(events)) return true;
 
   std::vector<KeyEvent> cleanup;
   cleanup.reserve(injected_modifiers.size() + neutralized_modifiers.size());
-  for (auto modifier = injected_modifiers.rbegin(); modifier != injected_modifiers.rend();
-       ++modifier) {
-    cleanup.push_back({*modifier, false});
-  }
-  for (auto modifier = neutralized_modifiers.rbegin(); modifier != neutralized_modifiers.rend();
-       ++modifier) {
-    cleanup.push_back({*modifier, true});
-  }
+  append_restores(cleanup, injected_modifiers, neutralized_modifiers, input);
   if (!cleanup.empty()) (void)input.send(cleanup);
   return false;
 }

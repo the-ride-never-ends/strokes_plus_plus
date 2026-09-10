@@ -1,3 +1,4 @@
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -13,9 +14,9 @@ namespace {
 struct TemporaryDirectory {
   std::filesystem::path path;
   TemporaryDirectory() {
-    static unsigned sequence = 0;
     path = std::filesystem::temp_directory_path() /
-           ("strokes-plus-plus-store-tests-" + std::to_string(++sequence));
+           ("strokes-plus-plus-store-tests-" +
+            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::error_code ec;
     std::filesystem::remove_all(path, ec);
   }
@@ -75,7 +76,7 @@ void malformed_and_recovery() {
     out << "{bad";
   }
   auto bad = store.load();
-  check(bad && bad.error.find("config.json") != std::string::npos,
+  check(bad && bad.warnings.find("config.json") != std::string::npos,
         "malformed global configuration is quarantined and reported");
   check(bad && bad.value->gestures.gestures.size() == 2,
         "malformed global configuration does not discard valid gestures");

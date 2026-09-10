@@ -41,11 +41,6 @@ bool WindowsGestureOverlay::create(HINSTANCE instance, Options options) {
     return false;
   }
   ::SetLayeredWindowAttributes(window_, RGB(0, 0, 0), options_.opacity, LWA_COLORKEY | LWA_ALPHA);
-  create_buffer();
-  if (memory_dc_ == nullptr) {
-    destroy();
-    return false;
-  }
   return true;
 }
 
@@ -62,26 +57,30 @@ void WindowsGestureOverlay::destroy() noexcept {
 
 void WindowsGestureOverlay::show(const gestures::Stroke& points) {
   if (!options_.enabled || window_ == nullptr) return;
+  const auto generation = generation_.fetch_add(1, std::memory_order_acq_rel) + 1;
+  {
+    std::scoped_lock lock(points_mutex_);
+    points_.clear();
+    painted_points_ = 0;
+  }
   update(points);
-  ::PostMessageW(window_, show_message, 0, 0);
+  ::PostMessageW(window_, show_message, generation, 0);
 }
 
 void WindowsGestureOverlay::update(const gestures::Stroke& points) {
   if (!options_.enabled || window_ == nullptr) return;
   {
     std::scoped_lock lock(points_mutex_);
-    if (points.size() < points_.size()) {
-      points_.clear();
-      painted_points_ = 0;
-    }
     points_.insert(points_.end(), points.begin() + static_cast<std::ptrdiff_t>(points_.size()),
                    points.end());
   }
-  ::PostMessageW(window_, refresh_message, 0, 0);
+  if (!refresh_pending_.exchange(true, std::memory_order_acq_rel))
+    ::PostMessageW(window_, refresh_message, generation_.load(std::memory_order_acquire), 0);
 }
 
 void WindowsGestureOverlay::hide() noexcept {
-  if (window_ != nullptr) ::PostMessageW(window_, hide_message, 0, 0);
+  if (window_ != nullptr)
+    ::PostMessageW(window_, hide_message, generation_.load(std::memory_order_acquire), 0);
 }
 
 void WindowsGestureOverlay::configure(Options options) noexcept {
@@ -94,7 +93,8 @@ void WindowsGestureOverlay::configure(Options options) noexcept {
     std::scoped_lock lock(points_mutex_);
     painted_points_ = 0;
     clear_buffer();
-    ::PostMessageW(window_, refresh_message, 0, 0);
+    if (!refresh_pending_.exchange(true, std::memory_order_acq_rel))
+      ::PostMessageW(window_, refresh_message, generation_.load(std::memory_order_acquire), 0);
   }
 }
 
@@ -112,20 +112,27 @@ LRESULT CALLBACK WindowsGestureOverlay::window_proc(HWND window, UINT message, W
 
 LRESULT WindowsGestureOverlay::handle_message(UINT message, WPARAM wp, LPARAM lp) {
   if (message == refresh_message) {
+    refresh_pending_.store(false, std::memory_order_release);
+    if (wp != generation_.load(std::memory_order_acquire)) return 0;
     draw_segments();
     return 0;
   }
   if (message == show_message) {
+    if (wp != generation_.load(std::memory_order_acquire)) return 0;
+    if (memory_dc_ == nullptr) create_buffer();
+    if (memory_dc_ == nullptr) return 0;
+    draw_segments();
     ::ShowWindow(window_, SW_SHOWNOACTIVATE);
     ::InvalidateRect(window_, nullptr, FALSE);
     return 0;
   }
   if (message == hide_message) {
+    if (wp != generation_.load(std::memory_order_acquire)) return 0;
     ::ShowWindow(window_, SW_HIDE);
     std::scoped_lock lock(points_mutex_);
     points_.clear();
     painted_points_ = 0;
-    clear_buffer();
+    destroy_buffer();
     return 0;
   }
   if (message == WM_DISPLAYCHANGE) {
@@ -160,8 +167,9 @@ void WindowsGestureOverlay::resize_screen() noexcept {
   height_ = ::GetSystemMetrics(SM_CYVIRTUALSCREEN);
   ::SetWindowPos(window_, HWND_TOPMOST, origin_x_, origin_y_, width_, height_,
                  SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+  const bool buffered = memory_dc_ != nullptr;
   destroy_buffer();
-  create_buffer();
+  if (buffered) create_buffer();
   {
     std::scoped_lock lock(points_mutex_);
     painted_points_ = 0;

@@ -33,6 +33,14 @@ void global_tests() {
   auto invalid = encode(input);
   *invalid.get_if<json::Object>()->at("recognition_threshold").get_if<double>() = 2;
   check(!decode_options(invalid), "invalid recognition threshold is rejected");
+  check(!decode_options(json::Object{{"version", 99.0}}),
+        "unsupported global configuration version is rejected");
+  check(!decode_options(json::Object{{"maximum_points", 1000001.0}}),
+        "unbounded maximum point counts are rejected");
+  auto clamped = decode_options(
+      json::Object{{"movement_threshold", 1.0}, {"minimum_point_distance", 2.0}});
+  check(clamped && clamped.value->minimum_point_distance == 1.0 && !clamped.error.empty(),
+        "point distance is recoverably clamped to the movement threshold");
 
   const auto documented = json::parse(R"({
         "gesture_button": "right",
@@ -107,6 +115,13 @@ void profile_tests() {
   result = decode_profiles(mixed);
   check(result && result.value->profiles.size() == 1 && !result.error.empty(),
         "valid profiles survive a malformed sibling entry");
+  auto malformed_actions = encode(input);
+  malformed_actions.get_if<json::Object>()->at("profiles").get_if<json::Array>()->front()
+      .get_if<json::Object>()->insert_or_assign("actions", json::Array{});
+  result = decode_profiles(malformed_actions);
+  check(result && result.value->profiles.size() == 1 &&
+            result.value->profiles.front().actions_by_gesture.empty(),
+        "malformed profile actions are discarded without dropping the profile");
 
   const auto documented = json::parse(R"({
         "profiles": [{

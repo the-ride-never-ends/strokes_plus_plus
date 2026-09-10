@@ -35,7 +35,10 @@ EngineUpdate GestureEngine::process(const input::MouseInputEvent& event) {
       start.activation_button = event.button;
       start.position = event.position;
       start.modifiers = modifier_state_.current_modifiers();
-      if (const auto application = application_context_.foreground_application()) {
+      const auto application = event.target_window != 0
+                                   ? application_context_.application_for_window(event.target_window)
+                                   : application_context_.foreground_application();
+      if (application) {
         start.application = *application;
       }
       result.gesture = state_machine_.button_down(std::move(start));

@@ -15,6 +15,9 @@ class StructuredLogger {
   [[nodiscard]] bool log(std::string_view event, config::json::Object fields = {}) noexcept;
 
  private:
+  [[nodiscard]] bool rotate_if_needed(std::size_t incoming) noexcept;
+  std::filesystem::path path_;
+  std::uintmax_t bytes_written_{};
   mutable std::mutex mutex_;
   std::ofstream output_;
 };

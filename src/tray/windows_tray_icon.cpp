@@ -7,6 +7,7 @@ namespace {
 constexpr wchar_t class_name[] = L"StrokesPlusPlusTrayWindow";
 constexpr UINT callback_message = WM_APP + 1;
 constexpr UINT icon_id = 1;
+constexpr UINT retry_timer_id = 1;
 constexpr UINT enable_id = 1001, disable_id = 1002, settings_id = 1003, exit_id = 1004;
 
 HICON status_icon(bool enabled) noexcept {
@@ -85,6 +86,10 @@ LRESULT WindowsTrayIcon::handle_message(UINT message, WPARAM wp, LPARAM lp) {
     add_icon();
     return 0;
   }
+  if (message == WM_TIMER && wp == retry_timer_id) {
+    add_icon();
+    return 0;
+  }
   if (message == WM_POWERBROADCAST) {
     if (wp == PBT_APMSUSPEND)
       handler_(TrayCommand::suspend, context_);
@@ -131,9 +136,11 @@ void WindowsTrayIcon::add_icon() noexcept {
   icon.hIcon = status_icon(enabled_);
   ::lstrcpynW(icon.szTip, enabled_ ? L"Strokes++ - Enabled" : L"Strokes++ - Disabled", 128);
   if (::Shell_NotifyIconW(NIM_ADD, &icon)) {
+    ::KillTimer(window_, retry_timer_id);
     icon.uVersion = NOTIFYICON_VERSION_4;
     (void)::Shell_NotifyIconW(NIM_SETVERSION, &icon);
-  }
+  } else
+    ::SetTimer(window_, retry_timer_id, 2000, nullptr);
 }
 
 void WindowsTrayIcon::show_menu() noexcept {

@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gestures/recognizer.h"
@@ -8,7 +9,9 @@ namespace strokes::gestures {
 /// Applies validated identity-safe edits to gesture definitions and templates.
 class GestureRepository {
  public:
-  explicit GestureRepository(std::vector<GestureDefinition>& gestures) : gestures_(gestures) {}
+  explicit GestureRepository(std::vector<GestureDefinition>& gestures,
+                             StrokeNormalizer normalizer = StrokeNormalizer())
+      : gestures_(gestures), normalizer_(std::move(normalizer)) {}
   [[nodiscard]] bool create(std::string id, std::string name);
   [[nodiscard]] bool rename(const std::string& id, std::string name);
   [[nodiscard]] bool set_enabled(const std::string& id, bool enabled);
@@ -19,5 +22,6 @@ class GestureRepository {
 
  private:
   std::vector<GestureDefinition>& gestures_;
+  StrokeNormalizer normalizer_;
 };
 }  // namespace strokes::gestures

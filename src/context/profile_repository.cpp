@@ -10,23 +10,19 @@
 namespace strokes::context {
 namespace {
 
-bool valid_criterion(const MatchCriterion& criterion) {
+bool compile_criterion(MatchCriterion& criterion) {
   if (criterion.value.empty()) return false;
-  if (criterion.mode != MatchMode::regex) return true;
-  try {
-    (void)std::regex(criterion.value, std::regex::ECMAScript | std::regex::icase);
-    return true;
-  } catch (const std::regex_error&) {
-    return false;
-  }
-}
-
-void compile_criterion(MatchCriterion& criterion) {
   if (criterion.mode == MatchMode::regex) {
-    criterion.compiled_regex.emplace(criterion.value, std::regex::ECMAScript | std::regex::icase);
+    try {
+      criterion.compiled_regex.emplace(criterion.value,
+                                       std::regex::ECMAScript | std::regex::icase);
+    } catch (const std::regex_error&) {
+      return false;
+    }
   } else {
     criterion.compiled_regex.reset();
   }
+  return true;
 }
 
 bool valid_action(const actions::Action& action) {
@@ -68,8 +64,7 @@ bool ProfileRepository::erase(const std::string& id) { return detail::erase_id(p
 
 bool ProfileRepository::add_criterion(const std::string& id, MatchCriterion criterion) {
   auto* profile = find(id);
-  if (profile == nullptr || !valid_criterion(criterion)) return false;
-  compile_criterion(criterion);
+  if (profile == nullptr || !compile_criterion(criterion)) return false;
   profile->criteria.push_back(std::move(criterion));
   return true;
 }
@@ -77,10 +72,9 @@ bool ProfileRepository::add_criterion(const std::string& id, MatchCriterion crit
 bool ProfileRepository::replace_criterion(const std::string& id, std::size_t index,
                                           MatchCriterion criterion) {
   auto* profile = find(id);
-  if (profile == nullptr || index >= profile->criteria.size() || !valid_criterion(criterion)) {
+  if (profile == nullptr || index >= profile->criteria.size() || !compile_criterion(criterion)) {
     return false;
   }
-  compile_criterion(criterion);
   profile->criteria[index] = std::move(criterion);
   return true;
 }

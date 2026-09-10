@@ -26,13 +26,26 @@ class GestureStateMachine {
   GestureStateMachine();
   explicit GestureStateMachine(Options options);
 
+  /// Begins a session from a point using default context.
   [[nodiscard]] GestureUpdate button_down(gestures::Point position);
+  /// Begins a session from a complete activation snapshot.
+  ///
+  /// Args:
+  ///   start: Immutable activation-time position, modifiers, and application context.
+  /// Returns:
+  ///   Flags describing the resulting state transition.
   [[nodiscard]] GestureUpdate button_down(GestureStart start);
+  /// Records a qualifying point and enters capture when needed.
   [[nodiscard]] GestureUpdate pointer_moved(gestures::Point position);
+  /// Completes a pending click or requests recognition of a captured stroke.
   [[nodiscard]] GestureUpdate button_up(gestures::Point position);
+  /// Cancels the active interaction without executing an action.
   [[nodiscard]] GestureUpdate cancel();
+  /// Completes cancellation and restores the idle state.
   [[nodiscard]] GestureUpdate cancellation_finished();
+  /// Completes recognition and selects executing or idle state.
   [[nodiscard]] GestureUpdate recognition_finished(bool has_action);
+  /// Completes action execution and restores the idle state.
   [[nodiscard]] GestureUpdate execution_finished();
 
   [[nodiscard]] GestureState state() const noexcept { return state_; }

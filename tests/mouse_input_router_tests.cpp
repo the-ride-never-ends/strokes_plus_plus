@@ -98,13 +98,26 @@ void invalid_sequence_cancellation() {
   });
   (void)router.route(event(MouseEventType::button_down, 0, 0));
   const auto unrelated =
-      router.route(event(MouseEventType::button_down, 1, 1, ActivationButton::middle));
+      router.route(event(MouseEventType::button_down, 1, 1, ActivationButton::left));
   check(!unrelated.suppress_input && unrelated.event_delivered && !router.interaction_active(),
         "another mouse-button press passes through and cancels the active gesture");
   check(delivered.back().type == MouseEventType::cancel,
         "invalid input sequence delivers cancellation to the engine");
   check(router.route(event(MouseEventType::button_up, 1, 1)).suppress_input,
         "activation release after invalid-sequence cancellation remains balanced");
+}
+
+void returning_to_origin() {
+  std::vector<MouseInputEvent> delivered;
+  MouseInputRouter router([&](const auto& value) {
+    delivered.push_back(value);
+    return true;
+  });
+  (void)router.route(event(MouseEventType::button_down, 0, 0));
+  (void)router.route(event(MouseEventType::pointer_moved, 10, 0));
+  const auto returned = router.route(event(MouseEventType::pointer_moved, 0, 0));
+  check(returned.event_delivered && delivered.back().position.x == 0,
+        "all movement is delivered after capture starts, including a return to origin");
 }
 
 void dpi_scaled_thresholds() {
@@ -132,6 +145,7 @@ void run_mouse_input_router_tests() {
   disabled_and_saturated_behavior();
   explicit_cancellation();
   invalid_sequence_cancellation();
+  returning_to_origin();
   dpi_scaled_thresholds();
 }
 

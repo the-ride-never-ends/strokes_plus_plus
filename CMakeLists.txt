@@ -74,7 +74,6 @@ if(STROKES_BUILD_TESTS)
         tests/mouse_input_router_tests.cpp
         tests/logging_tests.cpp
         tests/profile_tests.cpp
-        tests/performance_tests.cpp
         tests/state_machine_tests.cpp
     )
     target_link_libraries(strokes_core_tests PRIVATE strokes_core)
@@ -85,6 +84,19 @@ if(STROKES_BUILD_TESTS)
         target_compile_options(strokes_core_tests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME strokes_core_tests COMMAND strokes_core_tests)
+    add_executable(strokes_performance_tests
+        tests/performance_main.cpp
+        tests/performance_tests.cpp
+    )
+    target_link_libraries(strokes_performance_tests PRIVATE strokes_core)
+    target_compile_features(strokes_performance_tests PRIVATE cxx_std_20)
+    if(MSVC)
+        target_compile_options(strokes_performance_tests PRIVATE /W4 /permissive- /EHsc)
+    else()
+        target_compile_options(strokes_performance_tests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME strokes_performance_tests COMMAND strokes_performance_tests)
+    set_tests_properties(strokes_performance_tests PROPERTIES LABELS performance)
     if(WIN32)
         add_executable(strokes_windows_smoke_tests tests/windows_smoke_tests.cpp)
         target_link_libraries(strokes_windows_smoke_tests PRIVATE strokes_windows)

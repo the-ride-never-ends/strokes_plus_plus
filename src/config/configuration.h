@@ -20,6 +20,10 @@ struct OverlayOptions {
 
 struct GlobalOptions {
   static constexpr int current_version = 1;
+  static constexpr double maximum_movement_threshold = 1000.0;
+  static constexpr double maximum_point_distance = 1000.0;
+  static constexpr std::size_t maximum_point_limit = 1'000'000;
+  static constexpr int maximum_overlay_line_width = 100;
   int version{current_version};
   bool gestures_enabled{true};
   input::ActivationButton gesture_button{input::ActivationButton::right};

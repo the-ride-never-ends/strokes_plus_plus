@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <cstdint>
 
 #include "context/application_context.h"
 
@@ -11,6 +12,10 @@ class IApplicationContextProvider {
  public:
   virtual ~IApplicationContextProvider() = default;
   [[nodiscard]] virtual std::optional<ApplicationContext> foreground_application() const = 0;
+  [[nodiscard]] virtual std::optional<ApplicationContext> application_for_window(
+      std::uintptr_t) const {
+    return foreground_application();
+  }
 };
 
 }  // namespace strokes::context

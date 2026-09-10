@@ -1,21 +1,18 @@
 #include <Windows.h>
 
-#include <iostream>
+#include <array>
+#include <vector>
 
 #include "context/windows_application_context.h"
+#include "actions/windows_keyboard_input.h"
 #include "input/windows_keyboard_hook.h"
 #include "input/windows_mouse_click.h"
 #include "input/windows_mouse_hook.h"
 #include "overlay/windows_gesture_overlay.h"
+#include "test_support.h"
 
 namespace {
-int failures = 0;
-void check(bool condition, const char* message) {
-  if (!condition) {
-    std::cerr << "FAIL: " << message << '\n';
-    ++failures;
-  }
-}
+using strokes::tests::check;
 bool pass_mouse(const strokes::input::MouseInputEvent&, void*) noexcept { return false; }
 bool pass_escape(void*) noexcept { return false; }
 }  // namespace
@@ -30,6 +27,27 @@ int main() {
         "right click emits balanced native button input");
   check((right[3].mi.dwFlags & MOUSEEVENTF_MOVE) != 0,
         "right click restores the current cursor position");
+  std::vector<std::vector<INPUT>> mouse_batches;
+  input::WindowsMouseClick partial_mouse([&](UINT count, INPUT* inputs, int) {
+    mouse_batches.emplace_back(inputs, inputs + count);
+    return mouse_batches.size() == 1 ? 2U : count;
+  });
+  check(!partial_mouse.click(input::ActivationButton::right, {10, 20}) &&
+            mouse_batches.size() == 2 && mouse_batches.back().size() == 2 &&
+            mouse_batches.back()[0].mi.dwFlags == MOUSEEVENTF_RIGHTUP,
+        "partial mouse injection releases the pressed button and restores the cursor");
+
+  std::vector<INPUT> keyboard_inputs;
+  actions::WindowsKeyboardInput keyboard([&](UINT count, INPUT* inputs, int) {
+    keyboard_inputs.assign(inputs, inputs + count);
+    return count - 1;
+  });
+  const std::array key_events{actions::KeyEvent{actions::VirtualKey::control, true},
+                              actions::KeyEvent{actions::VirtualKey::control, false}};
+  check(!keyboard.send(key_events) && keyboard_inputs.size() == 2 &&
+            keyboard_inputs[0].ki.dwFlags == 0 &&
+            keyboard_inputs[1].ki.dwFlags == KEYEVENTF_KEYUP,
+        "Windows keyboard backend translates events and reports a partial SendInput result");
 
   bool suppress_up = false;
   KBDLLHOOKSTRUCT escape{};
@@ -64,5 +82,5 @@ int main() {
   mouse_hook.stop();
   check(!mouse_hook.running() && !keyboard_hook.running(), "low-level hooks uninstall cleanly");
 
-  return failures == 0 ? 0 : 1;
+  return strokes::tests::failures == 0 ? 0 : 1;
 }

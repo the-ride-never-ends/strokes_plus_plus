@@ -21,6 +21,9 @@ void run_logging_tests() {
           "structured event is written");
     check(logger.log("recognition_result", {{"gesture", "left"}, {"score", 0.91}}),
           "second structured event is written");
+    check(logger.log("large_record", {{"payload", std::string(5U * 1024U * 1024U, 'x')}}),
+          "large log record is written");
+    check(logger.log("rotation_trigger"), "logging continues after runtime rotation");
   }
   std::ifstream input(directory / "strokes.log");
   std::string line;
@@ -33,7 +36,8 @@ void run_logging_tests() {
           "log record has required fields");
     ++records;
   }
-  check(records == 2, "logger appends one JSON object per event");
+  check(records == 1 && std::filesystem::exists(directory / "strokes.log.1"),
+        "logger rotates while the process remains running");
   std::filesystem::remove_all(directory, error);
 }
 }  // namespace strokes::tests

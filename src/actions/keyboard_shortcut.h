@@ -30,6 +30,7 @@ enum class VirtualKey : std::uint16_t {
   digit_0 = 0x30,
   letter_a = 0x41,
   left_windows = 0x5B,
+  right_windows = 0x5C,
   f1 = 0x70,
 };
 

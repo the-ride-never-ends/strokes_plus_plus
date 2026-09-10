@@ -8,6 +8,7 @@
 #include <Windows.h>
 
 #include <mutex>
+#include <atomic>
 
 namespace strokes::overlay {
 
@@ -57,6 +58,8 @@ class WindowsGestureOverlay final : public engine::IGestureFeedback {
   std::mutex points_mutex_;
   gestures::Stroke points_;
   std::size_t painted_points_{};
+  std::atomic<unsigned long> generation_{};
+  std::atomic<bool> refresh_pending_{};
 };
 
 }  // namespace strokes::overlay

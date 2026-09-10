@@ -296,8 +296,14 @@ bool quarantine(const std::filesystem::path& path, std::string& error) {
   auto invalid = path;
   invalid += ".invalid";
   std::error_code ec;
-  std::filesystem::remove(invalid, ec);
-  ec.clear();
+  for (unsigned suffix = 1; std::filesystem::exists(invalid, ec) && !ec; ++suffix) {
+    invalid = path;
+    invalid += ".invalid." + std::to_string(suffix);
+  }
+  if (ec) {
+    error = "cannot inspect invalid configuration path: " + ec.message();
+    return false;
+  }
   std::filesystem::rename(path, invalid, ec);
   if (ec) {
     error = "cannot preserve invalid " + path.string() + ": " + ec.message();
@@ -324,8 +330,7 @@ bool load_component(const std::filesystem::path& path, const T& fallback, Decode
   if (!quarantine(path, error)) return false;
   if (!write_encoded(path, fallback, error)) return false;
   output = fallback;
-  append_warning(warnings, original_error + " (preserved as " + path.string() +
-                               ".invalid; defaults restored)");
+  append_warning(warnings, original_error + " (invalid file preserved; defaults restored)");
   return true;
 }
 
@@ -374,7 +379,7 @@ ConfigurationLoadResult ConfigurationStore::load() const {
                       error)) {
     return {{}, error};
   }
-  return {std::move(result), std::move(warnings)};
+  return {std::move(result), {}, std::move(warnings)};
 }
 
 bool ConfigurationStore::save(const ConfigurationBundle& value, std::string& error) const {

@@ -12,6 +12,7 @@ enum class ActivationButton {
   middle,
   x_button_1,
   x_button_2,
+  left,
 };
 
 enum class GestureState {

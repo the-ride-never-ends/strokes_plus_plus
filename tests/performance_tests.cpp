@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "gestures/recognizer.h"
+#include "context/profile_matcher.h"
 #include "input/mouse_input_router.h"
 #include "test_support.h"
 
@@ -22,10 +23,12 @@ void recognition_performance() {
   }
   constexpr int iterations = 1000;
   const auto start = std::chrono::steady_clock::now();
+  bool recognized = true;
   for (int i = 0; i < iterations; ++i)
-    check(recognizer.recognize(stroke).has_value(), "benchmark stroke remains recognized");
+    recognized = recognizer.recognize(stroke).has_value() && recognized;
   const auto elapsed = std::chrono::steady_clock::now() - start;
   const auto average = std::chrono::duration<double, std::milli>(elapsed).count() / iterations;
+  check(recognized, "benchmark stroke remains recognized");
   check(average < 10.0, "typical recognition remains below 10 ms on average");
 }
 
@@ -58,10 +61,29 @@ void input_routing_performance() {
   check(average < 0.1,
         "synchronous hook-routing hot path remains substantially below 1 ms per event");
 }
+
+void profile_matching_performance() {
+  context::ApplicationProfile profile{"browser", "Browser", true, {}, {}};
+  for (int index = 0; index < 16; ++index) {
+    profile.criteria.push_back({context::ApplicationProperty::window_title,
+                                context::MatchMode::contains, "example"});
+  }
+  context::ApplicationContext application;
+  application.window_title = "Example document title";
+  context::ProfileMatcher matcher;
+  constexpr int iterations = 1000;
+  const auto start = std::chrono::steady_clock::now();
+  bool matched = true;
+  for (int index = 0; index < iterations; ++index) matched = matcher.matches(profile, application);
+  const auto elapsed = std::chrono::steady_clock::now() - start;
+  const auto average = std::chrono::duration<double, std::milli>(elapsed).count() / iterations;
+  check(matched && average < 10.0, "profile resolution remains within the recognition budget");
+}
 }  // namespace
 
 void run_performance_tests() {
   recognition_performance();
   input_routing_performance();
+  profile_matching_performance();
 }
 }  // namespace strokes::tests

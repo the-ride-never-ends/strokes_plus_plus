@@ -30,6 +30,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <semaphore>
 #include <stop_token>
 #include <thread>
 #include <utility>
@@ -58,8 +59,8 @@ class EngineHost {
     auto loaded = store.load();
     if (loaded) {
       configuration_ = std::move(*loaded.value);
-      if (!loaded.error.empty() && logger_)
-        (void)logger_->log("configuration_warning", {{"message", loaded.error}});
+      if (!loaded.warnings.empty() && logger_)
+        (void)logger_->log("configuration_warning", {{"message", loaded.warnings}});
     } else {
       configuration_ = config::ConfigurationStore::defaults();
       startup_error_ = loaded.error + "\n\nDefaults will be used for this session.";
@@ -94,7 +95,7 @@ class EngineHost {
         ::MessageBoxW(nullptr, L"The gesture overlay could not be created.",
                       L"Strokes++ Startup Error", MB_OK | MB_ICONERROR);
       worker_.request_stop();
-      wake_.notify_one();
+      wake_.release();
       return false;
     }
     if (!tray_.create(instance, &EngineHost::handle_tray, this)) {
@@ -103,7 +104,7 @@ class EngineHost {
                       L"Strokes++ Startup Error", MB_OK | MB_ICONERROR);
       overlay_.destroy();
       worker_.request_stop();
-      wake_.notify_one();
+      wake_.release();
       return false;
     }
     tray_.set_enabled(configuration_.global.gestures_enabled);
@@ -123,7 +124,7 @@ class EngineHost {
       tray_.destroy();
       overlay_.destroy();
       worker_.request_stop();
-      wake_.notify_one();
+      wake_.release();
       stop_foreground();
       return false;
     }
@@ -135,7 +136,7 @@ class EngineHost {
       if (logger_) (void)logger_->log("hook_failure", {{"hook", "keyboard"}});
       tray_.destroy();
       worker_.request_stop();
-      wake_.notify_one();
+      wake_.release();
       worker_.join();
       overlay_.destroy();
       stop_foreground();
@@ -183,7 +184,7 @@ class EngineHost {
     stop_foreground();
     tray_.destroy();
     worker_.request_stop();
-    wake_.notify_one();
+    wake_.release();
     worker_.join();
     save_worker_.request_stop();
     save_wake_.notify_one();
@@ -199,8 +200,9 @@ class EngineHost {
         queue_.size_approx() >= queue_.usable_capacity() - 1) {
       return false;
     }
+    const bool was_empty = queue_.empty();
     const bool queued = queue_.try_push(event);
-    if (queued) wake_.notify_one();
+    if (queued && was_empty) wake_.release();
     return queued;
   }
 
@@ -239,12 +241,11 @@ class EngineHost {
 
   static bool on_escape(void* context) noexcept {
     auto& host = *static_cast<EngineHost*>(context);
-    if (!host.router_.interaction_active()) return false;
+    if (!host.capturing_.load(std::memory_order_acquire)) return false;
     input::MouseInputEvent cancel;
     cancel.type = input::MouseEventType::cancel;
-    if (!host.queue_.try_push(cancel)) return false;
+    if (!host.enqueue(cancel)) return false;
     (void)host.router_.cancel_interaction();
-    host.wake_.notify_one();
     return true;
   }
 
@@ -260,7 +261,7 @@ class EngineHost {
         host.router_.set_enabled(false);
         input::MouseInputEvent cancel;
         cancel.type = input::MouseEventType::cancel;
-        if (host.queue_.try_push(cancel)) host.wake_.notify_one();
+        (void)host.enqueue(cancel);
         host.tray_.set_enabled(false);
         host.configuration_.global.gestures_enabled = false;
         host.save_configuration();
@@ -273,7 +274,7 @@ class EngineHost {
         (void)host.router_.cancel_interaction();
         input::MouseInputEvent cancel;
         cancel.type = input::MouseEventType::cancel;
-        if (host.queue_.try_push(cancel)) host.wake_.notify_one();
+        (void)host.enqueue(cancel);
         host.keyboard_hook_.stop();
         host.hook_.stop();
         host.overlay_.hide();
@@ -362,9 +363,9 @@ class EngineHost {
       hook_.stop();
       input::MouseInputEvent cancel;
       cancel.type = input::MouseEventType::cancel;
-      if (queue_.try_push(cancel)) wake_.notify_one();
+      (void)enqueue(cancel);
       worker_.request_stop();
-      wake_.notify_one();
+      wake_.release();
       worker_.join();
       overlay_.hide();
       flush_saves();
@@ -391,24 +392,22 @@ class EngineHost {
       }
       router_.set_enabled(configuration_.global.gestures_enabled);
       tray_.set_enabled(configuration_.global.gestures_enabled);
-      worker_ = std::jthread([this](std::stop_token stop) { engine_loop(stop); });
-      if (!hook_.start(&EngineHost::handle_mouse, this) ||
-          !keyboard_hook_.start(&EngineHost::on_escape, this)) {
-        keyboard_hook_.stop();
-        hook_.stop();
-        router_.set_enabled(false);
-        if (logger_) (void)logger_->log("hook_failure", {{"phase", "settings_resume"}});
-      }
+      restart_input();
     } catch (...) {
       ::MessageBoxW(nullptr, L"Settings could not be applied.", L"Strokes++", MB_OK | MB_ICONERROR);
       router_.set_enabled(configuration_.global.gestures_enabled);
-      worker_ = std::jthread([this](std::stop_token stop) { engine_loop(stop); });
-      if (!hook_.start(&EngineHost::handle_mouse, this) ||
-          !keyboard_hook_.start(&EngineHost::on_escape, this)) {
-        keyboard_hook_.stop();
-        hook_.stop();
-        router_.set_enabled(false);
-      }
+      restart_input();
+    }
+  }
+
+  void restart_input() noexcept {
+    worker_ = std::jthread([this](std::stop_token stop) { engine_loop(stop); });
+    if (!hook_.start(&EngineHost::handle_mouse, this) ||
+        !keyboard_hook_.start(&EngineHost::on_escape, this)) {
+      keyboard_hook_.stop();
+      hook_.stop();
+      router_.set_enabled(false);
+      if (logger_) (void)logger_->log("hook_failure", {{"phase", "settings_resume"}});
     }
   }
 
@@ -422,18 +421,36 @@ class EngineHost {
 
     while (!stop.stop_requested()) {
       while (const auto event = queue_.try_pop()) {
-        process_event(engine, *event);
+        try {
+          process_event(engine, *event);
+        } catch (const std::exception& exception) {
+          capturing_.store(false, std::memory_order_release);
+          overlay_.hide();
+          if (logger_) (void)logger_->log("engine_error", {{"message", exception.what()}});
+        } catch (...) {
+          capturing_.store(false, std::memory_order_release);
+          overlay_.hide();
+          if (logger_) (void)logger_->log("engine_error");
+        }
       }
-      std::unique_lock lock(wake_mutex_);
-      wake_.wait(lock, stop, [this] { return !queue_.empty(); });
+      if (!stop.stop_requested()) wake_.acquire();
     }
     while (const auto event = queue_.try_pop()) {
-      process_event(engine, *event);
+      try {
+        process_event(engine, *event);
+      } catch (...) {
+        capturing_.store(false, std::memory_order_release);
+        overlay_.hide();
+        if (logger_) (void)logger_->log("engine_error", {{"phase", "shutdown_drain"}});
+      }
     }
   }
 
   void process_event(engine::GestureEngine& engine, const input::MouseInputEvent& event) {
     const auto result = engine.process(event);
+    if (result.gesture.capture_started) capturing_.store(true, std::memory_order_release);
+    if (result.gesture.capture_cancelled || result.gesture.recognition_requested)
+      capturing_.store(false, std::memory_order_release);
     if (result.gesture.capture_started && engine.session() && logger_) {
       const auto& app = engine.session()->application;
       (void)logger_->log("gesture_start", {{"process", app.executable_name},
@@ -475,14 +492,14 @@ class EngineHost {
   HWINEVENTHOOK foreground_hook_{};
   inline static std::atomic<EngineHost*> active_host_{nullptr};
   std::atomic<bool> idle_test_passed_{false};
+  std::atomic<bool> capturing_{false};
   gestures::Recognizer recognizer_;
   context::WindowsApplicationContextProvider application_context_;
   input::WindowsModifierStateProvider modifier_state_;
   input::WindowsMouseClick mouse_click_;
   actions::WindowsKeyboardInput keyboard_input_;
   input::InputQueue<input::MouseInputEvent, 4096> queue_;
-  std::mutex wake_mutex_;
-  std::condition_variable_any wake_;
+  std::counting_semaphore<4097> wake_{0};
   std::mutex save_mutex_;
   std::condition_variable_any save_wake_;
   std::optional<config::ConfigurationBundle> pending_save_;
@@ -502,6 +519,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR command_line, int) {
   (void)::SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   const bool idle_test =
       command_line != nullptr && std::wcsstr(command_line, L"--idle-test") != nullptr;
+  HANDLE instance_mutex = nullptr;
+  if (!idle_test) {
+    instance_mutex = ::CreateMutexW(nullptr, FALSE, L"Local\\StrokesPlusPlus.SingleInstance");
+    if (instance_mutex == nullptr || ::GetLastError() == ERROR_ALREADY_EXISTS) {
+      if (instance_mutex != nullptr) ::CloseHandle(instance_mutex);
+      return EXIT_SUCCESS;
+    }
+  }
   std::optional<std::filesystem::path> test_directory;
   if (idle_test) {
     std::error_code error;
@@ -521,5 +546,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR command_line, int) {
     std::error_code error;
     std::filesystem::remove_all(*test_directory, error);
   }
+  if (instance_mutex != nullptr) ::CloseHandle(instance_mutex);
   return result;
 }

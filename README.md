@@ -51,6 +51,8 @@ an application running at a higher integrity level, such as an administrator-ele
 window. This is an expected Windows security restriction; the action is reported as an
 injection failure when Windows exposes the failure. Elevated-process automation is not
 part of the MVP, and running Strokes++ as administrator is not recommended for normal use.
+Windows may also deny process-image queries for elevated windows; in that case process-name
+profile matching is unavailable, while title and window-class criteria can still be used.
 
 The application performs no network communication, analytics, cloud synchronization, or
 update checks. Configuration and JSON Lines logs remain under

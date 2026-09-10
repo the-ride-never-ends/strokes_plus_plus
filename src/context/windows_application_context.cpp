@@ -101,7 +101,12 @@ std::string executable_name(DWORD process_id) {
 
 std::optional<ApplicationContext> WindowsApplicationContextProvider::foreground_application()
     const {
-  const HWND window = ::GetForegroundWindow();
+  return application_for_window(reinterpret_cast<std::uintptr_t>(::GetForegroundWindow()));
+}
+
+std::optional<ApplicationContext> WindowsApplicationContextProvider::application_for_window(
+    std::uintptr_t native_window) const {
+  const HWND window = reinterpret_cast<HWND>(native_window);
   if (window == nullptr) {
     return std::nullopt;
   }

@@ -4,10 +4,17 @@ All notable changes to Strokes++ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The project does not yet have a versioned release.
 
-## [Unreleased]
+## [0.2.0]
 
 ### Changed
 
+- Latched gesture capture after the movement threshold, sampled the target window at activation,
+  replaced hook-path condition-variable notification with semaphore signaling, and limited Escape
+  suppression to gestures that have actually entered capture.
+- Made the overlay allocate its virtual-desktop backbuffer only while visible, coalesce refreshes,
+  and use generation-tagged lifecycle messages so rapid gestures cannot reuse stale stroke state.
+- Centralized numeric configuration limits, cached locale construction, separated configuration
+  warnings from fatal errors, and isolated wall-clock performance gates in their own CTest target.
 - Moved movement-threshold ownership into the synchronous input router while allowing physical pointer movement to pass through during activation-button holds.
 - Deferred gesture-point allocation until capture begins, cached validated profile regular expressions, and moved DPI discovery out of the low-level mouse-hook callback.
 - Reworked overlay drawing around a retained backbuffer, incremental dirty-region repainting, and display-geometry refresh on `WM_DISPLAYCHANGE`.
@@ -17,6 +24,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Contained all gesture-worker exceptions, bounded hand-edited point and overlay settings, clamped
+  recoverable cross-field values, and prevented duplicate running instances.
+- Routed left-button presses into invalid-sequence cancellation, preserved return-to-origin stroke
+  points, rejected the transparent black overlay color, and balanced partial mouse injection.
+- Corrected new-gesture shortcut state and made clearing a shortcut consistent between Assign and
+  Save; malformed profile action collections now discard only those actions.
+- Rotated logs during long-running sessions, retained every quarantined configuration revision,
+  retried tray-icon registration, unregistered the trainer window class, rounded replay coordinates,
+  and documented elevated-process profile-matching limits.
+- Unified keyboard balance ownership in the executor, handled the right Windows key independently,
+  and restore neutralized modifiers only while they remain physically held.
 - Preserved valid gesture and profile files when one configuration component is malformed; invalid files are quarantined independently instead of causing an all-default rewrite.
 - Made three-file configuration updates transactional with startup rollback, durable flushes, and non-throwing filesystem error handling; tray-triggered saves now run on a coalescing background worker.
 - Accepted the partial configuration examples in MVP.md, validated shortcuts and regular expressions at decode time, and retained valid gestures when individual templates are malformed.
@@ -28,6 +46,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Tests
 
+- Added regressions for closed-loop routing, left-button cancellation, configuration bounds and
+  clamping, malformed profile actions, runtime log rotation, right-Windows-key handling, and native
+  keyboard/mouse injection failure paths; made temporary store paths concurrency-safe.
 - Added direct decoding tests for all MVP configuration examples, corrupt-component and interrupted-transaction recovery, two-thread SPSC behavior, disabled end-to-end routing, and additional malformed-input paths.
 - Added a `GestureEngine.exe --idle-test` CTest that measures the live process against the idle CPU and 50 MB working-set targets.
 - Expanded the routing benchmark to cover complete button-down, pointer-move, and button-up interactions with DPI scaling enabled.

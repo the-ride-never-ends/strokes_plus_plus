@@ -88,9 +88,21 @@ std::string lowercase(std::string_view text) {
     auto decoded = decode_utf8(text);
     if (!decoded) throw std::runtime_error("invalid UTF-8");
     std::wstring wide = std::move(*decoded);
-    const std::locale user_locale("");
+    static const std::locale user_locale = [] {
+      try {
+        return std::locale("");
+      } catch (const std::runtime_error&) {
+        return std::locale::classic();
+      }
+    }();
     const auto& facet = std::use_facet<std::ctype<wchar_t>>(user_locale);
     if (!wide.empty()) facet.tolower(wide.data(), wide.data() + wide.size());
+    // The classic locale does not fold Latin-1. Keep common UTF-8 profile
+    // names deterministic even on machines without an installed user locale.
+    for (auto& character : wide) {
+      if (character >= L'\u00C0' && character <= L'\u00DE' && character != L'\u00D7')
+        character = static_cast<wchar_t>(character + 0x20);
+    }
     return encode_utf8(wide);
   } catch (const std::exception&) {
     std::string result;

@@ -4,11 +4,14 @@
 #include <utility>
 
 namespace strokes::logging {
-StructuredLogger::StructuredLogger(const std::filesystem::path& path) {
+namespace {
+constexpr std::uintmax_t maximum_log_size = 5U * 1024U * 1024U;
+}
+
+StructuredLogger::StructuredLogger(const std::filesystem::path& path) : path_(path) {
   std::error_code error;
   std::filesystem::create_directories(path.parent_path(), error);
   if (error) return;
-  constexpr std::uintmax_t maximum_log_size = 5U * 1024U * 1024U;
   const bool exists = std::filesystem::exists(path, error);
   if (error) return;
   const auto size = exists ? std::filesystem::file_size(path, error) : 0;
@@ -19,7 +22,25 @@ StructuredLogger::StructuredLogger(const std::filesystem::path& path) {
     error.clear();
     std::filesystem::rename(path, previous, error);
   }
-  if (!error) output_.open(path, std::ios::binary | std::ios::app);
+  if (!error) {
+    output_.open(path, std::ios::binary | std::ios::app);
+    bytes_written_ = exists && size < maximum_log_size ? size : 0;
+  }
+}
+
+bool StructuredLogger::rotate_if_needed(std::size_t incoming) noexcept {
+  if (bytes_written_ + incoming <= maximum_log_size) return true;
+  output_.close();
+  std::error_code error;
+  auto previous = path_;
+  previous += ".1";
+  std::filesystem::remove(previous, error);
+  error.clear();
+  std::filesystem::rename(path_, previous, error);
+  if (error) return false;
+  output_.open(path_, std::ios::binary | std::ios::trunc);
+  bytes_written_ = 0;
+  return output_.good();
 }
 
 bool StructuredLogger::ready() const noexcept {
@@ -37,9 +58,10 @@ bool StructuredLogger::log(std::string_view event, config::json::Object fields) 
     fields.insert_or_assign("timestamp_ms", static_cast<double>(now));
     const std::string line = config::json::serialize(config::json::Value{std::move(fields)}, false);
     std::scoped_lock lock(mutex_);
-    if (!output_) return false;
+    if (!output_ || !rotate_if_needed(line.size() + 1)) return false;
     output_ << line << '\n';
     output_.flush();
+    if (output_.good()) bytes_written_ += line.size() + 1;
     return output_.good();
   } catch (...) {
     return false;

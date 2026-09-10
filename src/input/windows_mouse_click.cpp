@@ -4,6 +4,8 @@
 #define NOMINMAX
 #include <Windows.h>
 
+#include <cmath>
+
 namespace strokes::input {
 
 bool WindowsMouseClick::click(ActivationButton button, gestures::Point position) {
@@ -16,8 +18,14 @@ bool WindowsMouseClick::click(ActivationButton button, gestures::Point position)
   auto inputs =
       make_inputs(button, position,
                   {static_cast<double>(current.x), static_cast<double>(current.y)}, virtual_screen);
-  return ::SendInput(static_cast<UINT>(inputs.size()), inputs.data(),
-                     static_cast<int>(sizeof(INPUT))) == inputs.size();
+  const UINT sent = sender_(static_cast<UINT>(inputs.size()), inputs.data(), sizeof(INPUT));
+  if (sent == inputs.size()) return true;
+  INPUT cleanup[2]{};
+  UINT count = 0;
+  if (sent >= 2 && sent < 3) cleanup[count++] = inputs[2];
+  if (sent < 4) cleanup[count++] = inputs[3];
+  if (count != 0) (void)sender_(count, cleanup, sizeof(INPUT));
+  return false;
 }
 
 std::array<INPUT, 4> WindowsMouseClick::make_inputs(ActivationButton button,
@@ -28,6 +36,8 @@ std::array<INPUT, 4> WindowsMouseClick::make_inputs(ActivationButton button,
   DWORD up_flag = 0;
   DWORD mouse_data = 0;
   switch (button) {
+    case ActivationButton::left:
+      return {};
     case ActivationButton::right:
       down_flag = MOUSEEVENTF_RIGHTDOWN;
       up_flag = MOUSEEVENTF_RIGHTUP;
@@ -53,9 +63,9 @@ std::array<INPUT, 4> WindowsMouseClick::make_inputs(ActivationButton button,
     const auto width = static_cast<double>(virtual_screen.right - virtual_screen.left - 1);
     const auto height = static_cast<double>(virtual_screen.bottom - virtual_screen.top - 1);
     result.x =
-        width > 0.0 ? static_cast<LONG>((point.x - virtual_screen.left) * 65535.0 / width) : 0;
+        width > 0.0 ? static_cast<LONG>(std::lround((point.x - virtual_screen.left) * 65535.0 / width)) : 0;
     result.y =
-        height > 0.0 ? static_cast<LONG>((point.y - virtual_screen.top) * 65535.0 / height) : 0;
+        height > 0.0 ? static_cast<LONG>(std::lround((point.y - virtual_screen.top) * 65535.0 / height)) : 0;
     return result;
   };
   const auto click = absolute(position);

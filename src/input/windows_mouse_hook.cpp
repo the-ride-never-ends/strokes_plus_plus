@@ -60,10 +60,19 @@ bool WindowsMouseHook::translate(WPARAM message, const MSLLHOOKSTRUCT& native,
                                  MouseInputEvent& event) noexcept {
   event.position = {static_cast<double>(native.pt.x), static_cast<double>(native.pt.y)};
   event.timestamp = std::chrono::milliseconds(native.time);
+  if (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN || message == WM_MBUTTONDOWN ||
+      message == WM_XBUTTONDOWN)
+    event.target_window = reinterpret_cast<std::uintptr_t>(::GetForegroundWindow());
 
   switch (message) {
     case WM_MOUSEMOVE:
       event.type = MouseEventType::pointer_moved;
+      return true;
+    case WM_LBUTTONDOWN:
+      event.type = MouseEventType::button_down;
+      // Left is not a supported activation button, but routing the down event
+      // lets an active gesture treat it as an invalid sequence.
+      event.button = ActivationButton::left;
       return true;
     case WM_RBUTTONDOWN:
       event.type = MouseEventType::button_down;

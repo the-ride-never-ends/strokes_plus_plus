@@ -42,6 +42,8 @@ void WindowsKeyboardHook::stop() noexcept {
 }
 
 void WindowsKeyboardHook::finish_stop() noexcept {
+  // A deferred stop deliberately completes from the callback after the
+  // suppressed Escape key-up, which Win32 permits for low-level hooks.
   if (hook_ != nullptr) {
     ::UnhookWindowsHookEx(hook_);
     hook_ = nullptr;

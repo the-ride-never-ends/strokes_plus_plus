@@ -38,6 +38,8 @@ std::optional<int> integer_value(const Value& value) {
 
 std::string encode_button(input::ActivationButton value) {
   switch (value) {
+    case input::ActivationButton::left:
+      return {};
     case input::ActivationButton::right:
       return "right";
     case input::ActivationButton::middle:
@@ -96,16 +98,6 @@ std::optional<context::MatchMode> decode_mode(std::string_view value) {
   return std::nullopt;
 }
 
-bool valid_regex(const context::MatchCriterion& criterion) {
-  if (criterion.mode != context::MatchMode::regex) return true;
-  try {
-    (void)std::regex(criterion.value, std::regex::ECMAScript | std::regex::icase);
-    return true;
-  } catch (const std::regex_error&) {
-    return false;
-  }
-}
-
 Value encode_action(const actions::Action& action) {
   return Object{{"type", "keyboard"}, {"shortcut", action.value}};
 }
@@ -157,7 +149,7 @@ bool decode_version(const Object& object, int current_version, int& version) {
   return true;
 }
 
-bool decode_legacy_match(const Object& profile, std::vector<context::MatchCriterion>& criteria) {
+bool legacy_match(const Object& profile, std::vector<context::MatchCriterion>& criteria) {
   const auto* encoded_match = field(profile, "match");
   const auto* match = encoded_match == nullptr ? nullptr : encoded_match->get_if<Object>();
   if (match == nullptr) return false;
@@ -209,21 +201,25 @@ DecodeResult<GlobalOptions> decode_options(const Value& value) {
   }
   if (const auto* encoded = field(*object, "movement_threshold")) {
     const auto* decoded = encoded->get_if<double>();
-    if (decoded == nullptr || !std::isfinite(*decoded) || *decoded < 0.0) {
-      return {{}, "movement_threshold must be a non-negative finite number"};
+    if (decoded == nullptr || !std::isfinite(*decoded) || *decoded < 0.0 ||
+        *decoded > GlobalOptions::maximum_movement_threshold) {
+      return {{}, "movement_threshold must be between 0 and 1000"};
     }
     result.movement_threshold = *decoded;
   }
   if (const auto* encoded = field(*object, "minimum_point_distance")) {
     const auto* decoded = encoded->get_if<double>();
-    if (decoded == nullptr || !std::isfinite(*decoded) || *decoded < 0.0) {
-      return {{}, "minimum_point_distance must be a non-negative finite number"};
+    if (decoded == nullptr || !std::isfinite(*decoded) || *decoded < 0.0 ||
+        *decoded > GlobalOptions::maximum_point_distance) {
+      return {{}, "minimum_point_distance must be between 0 and 1000"};
     }
     result.minimum_point_distance = *decoded;
   }
   if (const auto* encoded = field(*object, "maximum_points")) {
     const auto decoded = integer_value(*encoded);
-    if (!decoded || *decoded < 2) return {{}, "maximum_points must be at least 2"};
+    if (!decoded || *decoded < 2 ||
+        static_cast<std::size_t>(*decoded) > GlobalOptions::maximum_point_limit)
+      return {{}, "maximum_points must be between 2 and 1000000"};
     result.maximum_points = static_cast<std::size_t>(*decoded);
   }
   if (const auto* encoded = field(*object, "recognition_threshold")) {
@@ -233,8 +229,10 @@ DecodeResult<GlobalOptions> decode_options(const Value& value) {
     }
     result.recognition_threshold = *decoded;
   }
+  std::string warning;
   if (result.minimum_point_distance > result.movement_threshold) {
-    return {{}, "minimum_point_distance cannot exceed movement_threshold"};
+    result.minimum_point_distance = result.movement_threshold;
+    warning = "minimum_point_distance was clamped to movement_threshold";
   }
 
   if (const auto* encoded = field(*object, "overlay")) {
@@ -247,7 +245,8 @@ DecodeResult<GlobalOptions> decode_options(const Value& value) {
     }
     if (const auto* item = field(*overlay, "line_width")) {
       const auto decoded = integer_value(*item);
-      if (!decoded || *decoded <= 0) return {{}, "overlay.line_width must be positive"};
+      if (!decoded || *decoded <= 0 || *decoded > GlobalOptions::maximum_overlay_line_width)
+        return {{}, "overlay.line_width must be between 1 and 100"};
       result.overlay.line_width = *decoded;
     }
     if (const auto* item = field(*overlay, "opacity")) {
@@ -259,13 +258,13 @@ DecodeResult<GlobalOptions> decode_options(const Value& value) {
     }
     if (const auto* item = field(*overlay, "color")) {
       const auto decoded = integer_value(*item);
-      if (!decoded || *decoded < 0 || *decoded > 0xFFFFFF) {
-        return {{}, "overlay.color must be a 24-bit integer"};
+      if (!decoded || *decoded <= 0 || *decoded > 0xFFFFFF) {
+        return {{}, "overlay.color must be a non-black 24-bit integer"};
       }
       result.overlay.color = static_cast<std::uint32_t>(*decoded);
     }
   }
-  return {result, {}};
+  return {result, std::move(warning)};
 }
 
 Value encode(const GestureFile& file) {
@@ -448,23 +447,23 @@ DecodeResult<ProfileFile> decode_profiles(const Value& value) {
           continue;
         }
         context::MatchCriterion candidate{*property, *mode, *criterion_value};
-        if (!valid_regex(candidate)) {
-          ++skipped;
-          continue;
-        }
         if (candidate.mode == context::MatchMode::regex) {
-          candidate.compiled_regex.emplace(candidate.value,
-                                           std::regex::ECMAScript | std::regex::icase);
+          try {
+            candidate.compiled_regex.emplace(candidate.value,
+                                             std::regex::ECMAScript | std::regex::icase);
+          } catch (const std::regex_error&) {
+            ++skipped;
+            continue;
+          }
         }
         decoded.criteria.push_back(std::move(candidate));
       }
-    } else if (!decode_legacy_match(*profile, decoded.criteria)) {
+    } else if (!legacy_match(*profile, decoded.criteria)) {
       ++skipped;
     }
     if (const auto* encoded_actions = field(*profile, "actions")) {
       if (!decode_actions(*encoded_actions, decoded.actions_by_gesture, skipped)) {
         ++skipped;
-        continue;
       }
     }
     if (decoded.criteria.empty()) decoded.enabled = false;

@@ -528,6 +528,7 @@ void WindowsSettingsWindow::add_gesture() {
   refresh_gestures();
   ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL,
                         configuration_->gestures.gestures.size() - 1, 0);
+  load_gesture();
 }
 
 void WindowsSettingsWindow::rename_gesture() {
@@ -750,21 +751,21 @@ bool WindowsSettingsWindow::save_values() {
   auto copy = *configuration_;
   double movement = 0, distance = 0, threshold = 0, opacity = 0;
   long maximum = 0, width = 0;
-  if (!read_double(window_, move_id, 0, 1000, movement) ||
-      !read_double(window_, distance_id, 0, 1000, distance) ||
-      !read_integer(window_, max_id, 2, 1000000, maximum) ||
+  if (!read_double(window_, move_id, 0, config::GlobalOptions::maximum_movement_threshold,
+                   movement) ||
+      !read_double(window_, distance_id, 0, config::GlobalOptions::maximum_point_distance,
+                   distance) ||
+      !read_integer(window_, max_id, 2,
+                    static_cast<long>(config::GlobalOptions::maximum_point_limit), maximum) ||
       !read_double(window_, threshold_id, 0, 1, threshold) ||
-      !read_integer(window_, width_id, 1, 100, width) ||
+      !read_integer(window_, width_id, 1, config::GlobalOptions::maximum_overlay_line_width,
+                    width) ||
       !read_double(window_, opacity_id, 0, 1, opacity)) {
     ::MessageBoxW(window_, L"One or more numeric settings are invalid.", L"Strokes++",
                   MB_OK | MB_ICONERROR);
     return false;
   }
-  if (distance > movement) {
-    ::MessageBoxW(window_, L"Point distance cannot exceed the movement threshold.", L"Strokes++",
-                  MB_OK | MB_ICONERROR);
-    return false;
-  }
+  if (distance > movement) distance = movement;
   wchar_t shortcut[128]{};
   ::GetDlgItemTextW(window_, shortcut_id, shortcut, 128);
   std::string shortcut_text;
@@ -795,10 +796,14 @@ bool WindowsSettingsWindow::save_values() {
   copy.global.overlay.enabled = ::IsDlgButtonChecked(window_, overlay_id) == BST_CHECKED;
   copy.global.overlay.line_width = static_cast<int>(width);
   copy.global.overlay.opacity = opacity;
-  if (gesture_selected >= 0 && !shortcut_text.empty())
-    copy.profiles.global_actions.insert_or_assign(
-        copy.gestures.gestures[static_cast<std::size_t>(gesture_selected)].id,
-        actions::Action{actions::ActionType::keyboard_shortcut, std::move(shortcut_text)});
+  if (gesture_selected >= 0) {
+    const auto& id = copy.gestures.gestures[static_cast<std::size_t>(gesture_selected)].id;
+    if (shortcut_text.empty())
+      copy.profiles.global_actions.erase(id);
+    else
+      copy.profiles.global_actions.insert_or_assign(
+          id, actions::Action{actions::ActionType::keyboard_shortcut, std::move(shortcut_text)});
+  }
   *configuration_ = std::move(copy);
   return true;
 }

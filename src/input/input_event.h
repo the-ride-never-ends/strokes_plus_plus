@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 
 #include "gestures/point.h"
 #include "input/gesture_session.h"
@@ -19,6 +20,7 @@ struct MouseInputEvent {
   gestures::Point position;
   ActivationButton button{ActivationButton::right};
   std::chrono::milliseconds timestamp{};
+  std::uintptr_t target_window{};
 };
 
 }  // namespace strokes::input
