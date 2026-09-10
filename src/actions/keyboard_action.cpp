@@ -1,6 +1,7 @@
 #include "actions/keyboard_action.h"
 
 #include <algorithm>
+#include <iterator>
 
 namespace strokes::actions {
 namespace {
@@ -40,16 +41,12 @@ bool is_down(IKeyboardInput& input, VirtualKey logical) {
 }  // namespace
 
 bool KeyboardActionExecutor::execute(const KeyboardShortcut& shortcut, IKeyboardInput& input) {
-  static constexpr VirtualKey all_modifiers[]{
-      VirtualKey::left_control, VirtualKey::right_control, VirtualKey::left_shift,
-      VirtualKey::right_shift,  VirtualKey::left_alt,     VirtualKey::right_alt,
-      VirtualKey::left_windows, VirtualKey::right_windows};
   std::vector<VirtualKey> injected_modifiers;
   std::vector<VirtualKey> neutralized_modifiers;
   std::vector<KeyEvent> events;
-  events.reserve(shortcut.modifiers.size() * 2 + std::size(all_modifiers) * 2 + 2);
+  events.reserve(shortcut.modifiers.size() * 2 + std::size(modifier_keys) * 2 + 2);
 
-  for (const VirtualKey modifier : all_modifiers) {
+  for (const VirtualKey modifier : modifier_keys) {
     if (!requests(shortcut, modifier) && input.is_key_down(modifier)) {
       events.push_back({modifier, false});
       neutralized_modifiers.push_back(modifier);
@@ -67,15 +64,18 @@ bool KeyboardActionExecutor::execute(const KeyboardShortcut& shortcut, IKeyboard
   append_releases(events, injected_modifiers);
   const bool sent = input.send(events);
 
+  // The restore pass runs after the injection so that a modifier the user let
+  // go of mid-action is not pressed again. This requires is_key_down to report
+  // physical state; an implementation backed by the injected key-state table
+  // would always answer "released" here.
   std::vector<KeyEvent> restores;
   append_restores(restores, neutralized_modifiers, input);
   if (!restores.empty()) (void)input.send(restores);
   if (sent) return true;
 
   std::vector<KeyEvent> cleanup;
-  cleanup.reserve(injected_modifiers.size() + neutralized_modifiers.size());
+  cleanup.reserve(injected_modifiers.size());
   append_releases(cleanup, injected_modifiers);
-  append_restores(cleanup, neutralized_modifiers, input);
   if (!cleanup.empty()) (void)input.send(cleanup);
   return false;
 }

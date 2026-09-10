@@ -37,8 +37,10 @@ int main() {
             mouse_batches.back()[0].mi.dwFlags == MOUSEEVENTF_RIGHTUP,
         "partial mouse injection releases the pressed button and restores the cursor");
 
+  actions::PhysicalKeyState keys;
+  keys.update(actions::VirtualKey::left_shift, true);
   std::vector<INPUT> keyboard_inputs;
-  actions::WindowsKeyboardInput keyboard([&](UINT count, INPUT* inputs, int) {
+  actions::WindowsKeyboardInput keyboard(keys, [&](UINT count, INPUT* inputs, int) {
     keyboard_inputs.assign(inputs, inputs + count);
     return count - 1;
   });
@@ -48,6 +50,10 @@ int main() {
             keyboard_inputs[0].ki.dwFlags == 0 &&
             keyboard_inputs[1].ki.dwFlags == KEYEVENTF_KEYUP,
         "Windows keyboard backend translates events and reports a partial SendInput result");
+  const std::array shift_release{actions::KeyEvent{actions::VirtualKey::left_shift, false}};
+  (void)keyboard.send(shift_release);
+  check(keyboard.is_key_down(actions::VirtualKey::left_shift),
+        "injecting a modifier key-up does not change the reported physical state");
 
   bool suppress_up = false;
   KBDLLHOOKSTRUCT escape{};
@@ -55,12 +61,15 @@ int main() {
   check(input::WindowsKeyboardHook::filter_escape(WM_KEYDOWN, escape, true, suppress_up) &&
             suppress_up,
         "handled Escape down is suppressed");
-  check(input::WindowsKeyboardHook::filter_escape(WM_KEYDOWN, escape, false, suppress_up) &&
-            suppress_up,
-        "repeated Escape down remains suppressed without repeating cancellation");
   check(input::WindowsKeyboardHook::filter_escape(WM_KEYUP, escape, false, suppress_up) &&
             !suppress_up,
         "matching Escape up is suppressed and balanced");
+  check(input::WindowsKeyboardHook::filter_escape(WM_KEYDOWN, escape, true, suppress_up) &&
+            suppress_up,
+        "a later cancellation re-arms the key-up latch");
+  check(!input::WindowsKeyboardHook::filter_escape(WM_KEYDOWN, escape, false, suppress_up) &&
+            !suppress_up,
+        "a declined Escape press clears a stale latch instead of swallowing the key");
   escape.flags = LLKHF_INJECTED;
   check(!input::WindowsKeyboardHook::filter_escape(WM_KEYDOWN, escape, true, suppress_up),
         "injected Escape is ignored");
@@ -77,7 +86,7 @@ int main() {
   input::WindowsMouseHook mouse_hook;
   input::WindowsKeyboardHook keyboard_hook;
   check(mouse_hook.start(pass_mouse, nullptr), "low-level mouse hook installs");
-  check(keyboard_hook.start(pass_escape, nullptr), "low-level keyboard hook installs");
+  check(keyboard_hook.start(pass_escape, nullptr, keys), "low-level keyboard hook installs");
   keyboard_hook.stop();
   mouse_hook.stop();
   check(!mouse_hook.running() && !keyboard_hook.running(), "low-level hooks uninstall cleanly");

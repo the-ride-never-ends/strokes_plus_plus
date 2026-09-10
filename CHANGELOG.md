@@ -4,6 +4,45 @@ All notable changes to Strokes++ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The project does not yet have a versioned release.
 
+## [0.4.0]
+
+### Changed
+
+- Tracked physically held modifier keys in the low-level keyboard hook and answered held-key
+  queries from that state instead of `GetAsyncKeyState`, whose table an action's own injection
+  modifies; the hook seeds the state on installation and observes only modifier keys and Escape.
+- Resolved gesture actions from the first matching application profile alone, falling back to the
+  global mapping when that profile has no entry rather than continuing into later profiles.
+- Coupled every event-pump wake token to exactly one consumed item by replacing the non-consuming
+  drain with `take`, so tokens cannot accumulate across worker restarts.
+- Split the settings window into a window that owns the modal loop, DPI scaling and global options
+  plus separate gesture and profile editors over shared control helpers and identifiers.
+- Bounded overlay opacity at the smallest value that survives conversion to an 8-bit alpha channel
+  instead of rejecting only exactly zero.
+- Consulted the cancellation handler on every physical Escape press so a latch whose key-up was
+  never delivered clears itself instead of suppressing Escape for the rest of the session.
+
+### Fixed
+
+- Stopped silently releasing a modifier the user is physically holding: the restore pass now reads
+  physical state that injection cannot corrupt, so a held Shift survives an action mapped to an
+  unrelated shortcut, and the outcome no longer races the injection.
+- Gave the settings window working keyboard navigation by making its controls tab stops and mapping
+  the dialog manager's Enter and Escape onto Save and Cancel, which `IsDialogMessageW` alone could
+  not reach and had begun swallowing.
+- Kept the log size bound after a failed rotation by restarting the byte budget, ending a
+  close-remove-rename-open cycle on every subsequent record and unbounded growth of the active log.
+- Removed a duplicate modifier restore on the injection-failure path and the unreachable second
+  activation-button bounds check in the settings save path.
+
+### Tests
+
+- Added regressions for injected key-ups leaving physical state unchanged, a stale Escape latch
+  clearing on a declined press, global fallback past a matching profile that is silent on the
+  gesture, drain-consumed wake tokens, and overlay opacity that rounds to a transparent window.
+- The held-modifier tests now pass because the production implementation matches the fake's model
+  of physical key state rather than because both possible platform behaviours were asserted.
+
 ## [0.3.0]
 
 ### Changed

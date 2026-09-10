@@ -130,7 +130,7 @@ class EngineHost {
       stop_foreground();
       return false;
     }
-    if (!keyboard_hook_.start(&EngineHost::on_escape, this)) {
+    if (!keyboard_hook_.start(&EngineHost::on_escape, this, physical_keys_)) {
       if (!idle_test)
         ::MessageBoxW(nullptr, L"The Escape-key cancellation hook could not be installed.",
                       L"Strokes++ Startup Error", MB_OK | MB_ICONERROR);
@@ -275,7 +275,8 @@ class EngineHost {
         if (!host.input_suspended_) return;
         const bool mouse_started = host.hook_.start(&EngineHost::handle_mouse, &host);
         const bool keyboard_started =
-            mouse_started && host.keyboard_hook_.start(&EngineHost::on_escape, &host);
+            mouse_started &&
+            host.keyboard_hook_.start(&EngineHost::on_escape, &host, host.physical_keys_);
         if (!keyboard_started) {
           host.keyboard_hook_.stop();
           host.hook_.stop();
@@ -392,7 +393,7 @@ class EngineHost {
   bool restart_input() noexcept {
     worker_ = std::jthread([this](std::stop_token stop) { engine_loop(stop); });
     if (!hook_.start(&EngineHost::handle_mouse, this) ||
-        !keyboard_hook_.start(&EngineHost::on_escape, this)) {
+        !keyboard_hook_.start(&EngineHost::on_escape, this, physical_keys_)) {
       keyboard_hook_.stop();
       hook_.stop();
       router_.set_enabled(false);
@@ -431,7 +432,7 @@ class EngineHost {
         }
       }
     }
-    while (const auto event = events_.try_pop()) {
+    while (const auto event = events_.take()) {
       try {
         process_event(engine, *event);
       } catch (...) {
@@ -493,7 +494,8 @@ class EngineHost {
   context::WindowsApplicationContextProvider application_context_;
   input::WindowsModifierStateProvider modifier_state_;
   input::WindowsMouseClick mouse_click_;
-  actions::WindowsKeyboardInput keyboard_input_;
+  actions::PhysicalKeyState physical_keys_;
+  actions::WindowsKeyboardInput keyboard_input_{physical_keys_};
   input::EventPump<input::MouseInputEvent, 4096> events_;
   std::mutex save_mutex_;
   std::condition_variable_any save_wake_;

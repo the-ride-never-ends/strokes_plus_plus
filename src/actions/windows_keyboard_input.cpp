@@ -9,9 +9,7 @@
 
 namespace strokes::actions {
 
-bool WindowsKeyboardInput::is_key_down(VirtualKey key) const {
-  return (::GetAsyncKeyState(static_cast<int>(key)) & 0x8000) != 0;
-}
+bool WindowsKeyboardInput::is_key_down(VirtualKey key) const { return keys_->held(key); }
 
 bool WindowsKeyboardInput::send(std::span<const KeyEvent> events) {
   if (events.empty() || events.size() > std::numeric_limits<UINT>::max()) {

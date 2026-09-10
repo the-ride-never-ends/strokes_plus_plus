@@ -117,6 +117,14 @@ void resolution_tests() {
   resolved = ActionResolver::resolve("left", chrome, precedence_profiles, globals);
   check(resolved && resolved->profile_id == "chrome" && resolved->action == profile_action,
         "first matching profile in configuration order has precedence");
+
+  auto silent_profile = profile;
+  silent_profile.id = "chrome-silent";
+  silent_profile.actions_by_gesture.clear();
+  const std::vector fallback_profiles{silent_profile, second_profile};
+  resolved = ActionResolver::resolve("left", chrome, fallback_profiles, globals);
+  check(resolved && resolved->source == ActionSource::global && resolved->action == global_action,
+        "a matching profile silent on the gesture falls back globally, not to a later profile");
 }
 
 }  // namespace

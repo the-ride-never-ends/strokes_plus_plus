@@ -40,6 +40,10 @@ bool StructuredLogger::rotate(std::size_t incoming) noexcept {
   if (error) {
     output_.clear();
     output_.open(path_, std::ios::binary | std::ios::app);
+    // Rotation failed, usually because the previous generation is locked.
+    // Restart the byte budget so records keep flowing and the next attempt
+    // happens a full interval later rather than on every record.
+    bytes_written_ = 0;
     return output_.good();
   }
   output_.open(path_, std::ios::binary | std::ios::trunc);

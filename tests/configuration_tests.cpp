@@ -53,6 +53,11 @@ void global_tests() {
         "oversized overlay line width is rejected");
   check(!decode_options(json::Object{{"overlay", json::Object{{"opacity", 0.0}}}}),
         "zero overlay opacity is rejected");
+  check(!decode_options(json::Object{{"overlay", json::Object{{"opacity", 0.001}}}}),
+        "an overlay opacity that rounds to a transparent window is rejected");
+  check(static_cast<bool>(decode_options(json::Object{
+            {"overlay", json::Object{{"opacity", GlobalOptions::minimum_overlay_opacity}}}})),
+        "the smallest visible overlay opacity is accepted");
   check(!decode_options(json::Object{{"overlay", json::Object{{"color", 0.0}}}}),
         "black overlay color is rejected");
 

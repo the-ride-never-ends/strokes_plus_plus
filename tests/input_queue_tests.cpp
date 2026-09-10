@@ -61,6 +61,14 @@ void run_input_queue_tests() {
   pump_consumer.join();
   check(pump_ordered.load(std::memory_order_relaxed),
         "event pump wakes for every accepted item without stranding work");
+
+  input::EventPump<int, 8> drained;
+  check(drained.push(1) && drained.push(2), "event pump accepts items for a drain");
+  drained.wake();
+  check(drained.take() == 1 && drained.take() == 2, "draining preserves item order");
+  check(!drained.take().has_value(), "draining reports an empty queue");
+  check(drained.push(3) && drained.wait_pop() == 3,
+        "no surplus wake token survives a drain to strand the next item");
 }
 
 }  // namespace strokes::tests

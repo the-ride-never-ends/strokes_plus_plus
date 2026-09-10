@@ -44,6 +44,9 @@ if(WIN32)
         src/tray/windows_tray_icon.cpp
         src/ui/windows_settings_window.cpp
         src/ui/windows_gesture_trainer.cpp
+        src/ui/settings_controls.cpp
+        src/ui/gesture_editor.cpp
+        src/ui/profile_editor.cpp
     )
     target_include_directories(strokes_windows PUBLIC src)
     target_link_libraries(strokes_windows PUBLIC strokes_core user32 shell32 ole32)

@@ -1,0 +1,50 @@
+#pragma once
+
+#include <string>
+
+#include "config/configuration_store.h"
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+
+namespace strokes::ui {
+
+/// Edits gesture definitions, training samples, and their global shortcuts.
+class GestureEditor {
+ public:
+  GestureEditor(HWND window, HINSTANCE instance, config::ConfigurationBundle& configuration)
+      : window_(window), instance_(instance), configuration_(&configuration) {}
+
+  void create();
+  void refresh();
+  /// Fills the name and shortcut fields from the selected gesture.
+  void load();
+  /// Handles one command, reporting whether it belonged to this editor.
+  [[nodiscard]] bool handle(int command, int notification);
+  /// Returns the selected gesture identifier, empty when nothing is selected.
+  [[nodiscard]] std::string selected() const;
+  /// Validates the shortcut field and applies it to the target bundle.
+  ///
+  /// Args:
+  ///   target: The pending configuration copy the settings window will commit.
+  /// Returns:
+  ///   False when the shortcut is invalid, after reporting it to the user.
+  [[nodiscard]] bool save(config::ConfigurationBundle& target) const;
+
+ private:
+  void add();
+  void rename();
+  void erase();
+  void train();
+  void drop_sample();
+  void toggle();
+  void assign();
+  [[nodiscard]] int index() const noexcept;
+
+  HWND window_;
+  HINSTANCE instance_;
+  config::ConfigurationBundle* configuration_;
+};
+
+}  // namespace strokes::ui

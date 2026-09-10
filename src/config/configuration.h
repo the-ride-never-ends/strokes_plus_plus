@@ -24,6 +24,9 @@ struct GlobalOptions {
   static constexpr double maximum_point_distance = 1000.0;
   static constexpr std::size_t maximum_point_limit = 1'000'000;
   static constexpr int maximum_overlay_line_width = 100;
+  // Overlay alpha is an 8-bit channel; anything below one step rounds to a
+  // fully transparent window, which is the state the color guard also rejects.
+  static constexpr double minimum_overlay_opacity = 1.0 / 255.0;
   int version{current_version};
   bool gestures_enabled{true};
   input::ActivationButton gesture_button{input::ActivationButton::right};

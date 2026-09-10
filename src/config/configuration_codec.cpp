@@ -256,8 +256,10 @@ DecodeResult<GlobalOptions> decode_options(const Value& value) {
     }
     if (const auto* item = field(*overlay, "opacity")) {
       const auto* decoded = item->get_if<double>();
-      if (decoded == nullptr || !std::isfinite(*decoded) || *decoded <= 0.0 || *decoded > 1.0) {
-        return {{}, "overlay.opacity must be greater than 0 and at most 1"};
+      if (decoded == nullptr || !std::isfinite(*decoded) ||
+          *decoded < GlobalOptions::minimum_overlay_opacity || *decoded > 1.0) {
+        return {{}, "overlay.opacity must be between " +
+                        std::to_string(GlobalOptions::minimum_overlay_opacity) + " and 1"};
       }
       result.overlay.opacity = *decoded;
     }

@@ -40,6 +40,20 @@ enum class VirtualKey : std::uint16_t {
   f1 = 0x70,
 };
 
+/// The sided modifier keys the action executor observes and injects.
+inline constexpr VirtualKey modifier_keys[]{
+    VirtualKey::left_control, VirtualKey::right_control, VirtualKey::left_shift,
+    VirtualKey::right_shift,  VirtualKey::left_alt,      VirtualKey::right_alt,
+    VirtualKey::left_windows, VirtualKey::right_windows};
+
+/// Reports whether a virtual key is one of the tracked modifiers.
+[[nodiscard]] constexpr bool modifier(VirtualKey key) noexcept {
+  for (const VirtualKey candidate : modifier_keys) {
+    if (candidate == key) return true;
+  }
+  return false;
+}
+
 struct KeyboardShortcut {
   std::vector<VirtualKey> modifiers;
   VirtualKey key{};
