@@ -17,7 +17,7 @@ class MouseInputRouter {
   struct Options {
     ActivationButton activation_button{ActivationButton::right};
     double movement_threshold{8.0};
-    std::function<double()> threshold_scale_provider;
+    std::function<double()> scale_provider;
   };
 
   using EventSink = std::function<bool(const MouseInputEvent&)>;

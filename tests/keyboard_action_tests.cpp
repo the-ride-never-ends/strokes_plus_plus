@@ -20,6 +20,7 @@ class FakeKeyboardInput final : public IKeyboardInput {
   std::vector<KeyEvent> sent_events;
   std::vector<std::vector<KeyEvent>> batches;
   bool send_result{true};
+  bool release_after_send{};
 
   bool is_key_down(VirtualKey key) const override {
     return std::ranges::find(held_keys, key) != held_keys.end();
@@ -28,6 +29,7 @@ class FakeKeyboardInput final : public IKeyboardInput {
   bool send(std::span<const KeyEvent> events) override {
     sent_events.assign(events.begin(), events.end());
     batches.emplace_back(events.begin(), events.end());
+    if (release_after_send) held_keys.clear();
     return send_result;
   }
 };
@@ -61,7 +63,7 @@ void ordering_tests() {
 void held_modifier_and_failure_tests() {
   const auto shortcut = actions::parse_shortcut("CTRL+SHIFT+W");
   FakeKeyboardInput input;
-  input.held_keys.push_back(VirtualKey::control);
+  input.held_keys.push_back(VirtualKey::left_control);
   check(shortcut && KeyboardActionExecutor::execute(*shortcut, input),
         "held-modifier shortcut executes");
   check(std::ranges::find(input.sent_events, KeyEvent{VirtualKey::control, true}) ==
@@ -74,23 +76,31 @@ void held_modifier_and_failure_tests() {
   input.send_result = false;
   check(shortcut && !KeyboardActionExecutor::execute(*shortcut, input),
         "input injection failure is reported");
-  check(input.batches.size() >= 3 &&
+  check(input.batches.size() == 3 &&
             input.batches.back() == std::vector{KeyEvent{VirtualKey::shift, false}},
         "failed input injection makes a best-effort release of injected modifiers");
 
   const auto control_w = actions::parse_shortcut("CTRL+W");
   FakeKeyboardInput shifted;
-  shifted.held_keys.push_back(VirtualKey::shift);
+  shifted.held_keys.push_back(VirtualKey::right_shift);
   check(control_w && KeyboardActionExecutor::execute(*control_w, shifted),
         "shortcut executes while an unrelated modifier is physically held");
-  check(shifted.sent_events.front() == KeyEvent{VirtualKey::shift, false} &&
-            shifted.sent_events.back() == KeyEvent{VirtualKey::shift, true},
+  check(shifted.batches.size() == 2 &&
+            shifted.batches.front().front() == KeyEvent{VirtualKey::right_shift, false} &&
+            shifted.batches.back().back() == KeyEvent{VirtualKey::right_shift, true},
         "unrelated held modifier is neutralized and restored around the shortcut");
+
+  FakeKeyboardInput released_shift;
+  released_shift.held_keys.push_back(VirtualKey::right_shift);
+  released_shift.release_after_send = true;
+  check(control_w && KeyboardActionExecutor::execute(*control_w, released_shift) &&
+            released_shift.batches.size() == 1,
+        "a modifier physically released during injection is not re-pressed");
 
   FakeKeyboardInput right_windows;
   right_windows.held_keys.push_back(VirtualKey::right_windows);
   check(control_w && KeyboardActionExecutor::execute(*control_w, right_windows) &&
-            right_windows.sent_events.front() == KeyEvent{VirtualKey::right_windows, false},
+            right_windows.batches.front().front() == KeyEvent{VirtualKey::right_windows, false},
         "the right Windows key is neutralized independently");
 }
 

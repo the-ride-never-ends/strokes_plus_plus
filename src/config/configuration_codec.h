@@ -12,6 +12,7 @@ template <typename T>
 struct DecodeResult {
   std::optional<T> value;
   std::string error;
+  std::string warning;
   [[nodiscard]] explicit operator bool() const noexcept { return value.has_value(); }
 };
 

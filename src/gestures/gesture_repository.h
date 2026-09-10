@@ -10,7 +10,7 @@ namespace strokes::gestures {
 class GestureRepository {
  public:
   explicit GestureRepository(std::vector<GestureDefinition>& gestures,
-                             StrokeNormalizer normalizer = StrokeNormalizer())
+                             StrokeNormalizer normalizer = default_normalizer())
       : gestures_(gestures), normalizer_(std::move(normalizer)) {}
   [[nodiscard]] bool create(std::string id, std::string name);
   [[nodiscard]] bool rename(const std::string& id, std::string name);

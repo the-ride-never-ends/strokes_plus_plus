@@ -36,7 +36,7 @@ EngineUpdate GestureEngine::process(const input::MouseInputEvent& event) {
       start.position = event.position;
       start.modifiers = modifier_state_.current_modifiers();
       const auto application = event.target_window != 0
-                                   ? application_context_.application_for_window(event.target_window)
+                                   ? application_context_.window_application(event.target_window)
                                    : application_context_.foreground_application();
       if (application) {
         start.application = *application;

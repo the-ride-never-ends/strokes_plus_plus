@@ -39,7 +39,7 @@ std::optional<int> integer_value(const Value& value) {
 std::string encode_button(input::ActivationButton value) {
   switch (value) {
     case input::ActivationButton::left:
-      return {};
+      return "left";
     case input::ActivationButton::right:
       return "right";
     case input::ActivationButton::middle:
@@ -53,6 +53,7 @@ std::string encode_button(input::ActivationButton value) {
 }
 
 std::optional<input::ActivationButton> decode_button(std::string_view value) {
+  if (value == "left") return input::ActivationButton::left;
   if (value == "right") return input::ActivationButton::right;
   if (value == "middle") return input::ActivationButton::middle;
   if (value == "xbutton1") return input::ActivationButton::x_button_1;
@@ -203,7 +204,8 @@ DecodeResult<GlobalOptions> decode_options(const Value& value) {
     const auto* decoded = encoded->get_if<double>();
     if (decoded == nullptr || !std::isfinite(*decoded) || *decoded < 0.0 ||
         *decoded > GlobalOptions::maximum_movement_threshold) {
-      return {{}, "movement_threshold must be between 0 and 1000"};
+      return {{}, "movement_threshold must be between 0 and " +
+                       std::to_string(GlobalOptions::maximum_movement_threshold)};
     }
     result.movement_threshold = *decoded;
   }
@@ -211,7 +213,8 @@ DecodeResult<GlobalOptions> decode_options(const Value& value) {
     const auto* decoded = encoded->get_if<double>();
     if (decoded == nullptr || !std::isfinite(*decoded) || *decoded < 0.0 ||
         *decoded > GlobalOptions::maximum_point_distance) {
-      return {{}, "minimum_point_distance must be between 0 and 1000"};
+      return {{}, "minimum_point_distance must be between 0 and " +
+                       std::to_string(GlobalOptions::maximum_point_distance)};
     }
     result.minimum_point_distance = *decoded;
   }
@@ -219,7 +222,8 @@ DecodeResult<GlobalOptions> decode_options(const Value& value) {
     const auto decoded = integer_value(*encoded);
     if (!decoded || *decoded < 2 ||
         static_cast<std::size_t>(*decoded) > GlobalOptions::maximum_point_limit)
-      return {{}, "maximum_points must be between 2 and 1000000"};
+      return {{}, "maximum_points must be between 2 and " +
+                       std::to_string(GlobalOptions::maximum_point_limit)};
     result.maximum_points = static_cast<std::size_t>(*decoded);
   }
   if (const auto* encoded = field(*object, "recognition_threshold")) {
@@ -246,13 +250,14 @@ DecodeResult<GlobalOptions> decode_options(const Value& value) {
     if (const auto* item = field(*overlay, "line_width")) {
       const auto decoded = integer_value(*item);
       if (!decoded || *decoded <= 0 || *decoded > GlobalOptions::maximum_overlay_line_width)
-        return {{}, "overlay.line_width must be between 1 and 100"};
+        return {{}, "overlay.line_width must be between 1 and " +
+                         std::to_string(GlobalOptions::maximum_overlay_line_width)};
       result.overlay.line_width = *decoded;
     }
     if (const auto* item = field(*overlay, "opacity")) {
       const auto* decoded = item->get_if<double>();
-      if (decoded == nullptr || !std::isfinite(*decoded) || *decoded < 0.0 || *decoded > 1.0) {
-        return {{}, "overlay.opacity must be between 0 and 1"};
+      if (decoded == nullptr || !std::isfinite(*decoded) || *decoded <= 0.0 || *decoded > 1.0) {
+        return {{}, "overlay.opacity must be greater than 0 and at most 1"};
       }
       result.overlay.opacity = *decoded;
     }
@@ -264,7 +269,7 @@ DecodeResult<GlobalOptions> decode_options(const Value& value) {
       result.overlay.color = static_cast<std::uint32_t>(*decoded);
     }
   }
-  return {result, std::move(warning)};
+  return {result, {}, std::move(warning)};
 }
 
 Value encode(const GestureFile& file) {
@@ -299,7 +304,7 @@ DecodeResult<GestureFile> decode_gestures(const Value& value) {
 
   std::size_t skipped = 0;
   std::unordered_set<std::string> gesture_ids;
-  const gestures::StrokeNormalizer normalizer;
+  const auto normalizer = gestures::default_normalizer();
   for (const auto& encoded_gesture : *gestures) {
     const auto* gesture = encoded_gesture.get_if<Object>();
     const auto* id = gesture == nullptr ? nullptr : field_as<std::string>(*gesture, "id");
@@ -318,9 +323,10 @@ DecodeResult<GestureFile> decode_gestures(const Value& value) {
       const auto* decoded = encoded->get_if<bool>();
       if (decoded == nullptr) {
         ++skipped;
-        continue;
+        enabled = false;
+      } else {
+        enabled = *decoded;
       }
-      enabled = *decoded;
     }
     gestures::GestureDefinition definition{*id, *name, enabled, {}};
     std::unordered_set<std::string> template_ids;
@@ -363,9 +369,10 @@ DecodeResult<GestureFile> decode_gestures(const Value& value) {
     gesture_ids.insert(*id);
     result.gestures.push_back(std::move(definition));
   }
-  return {std::move(result), skipped == 0 ? std::string{}
-                                          : "recovered with " + std::to_string(skipped) +
-                                                " invalid or disabled gesture/template entries"};
+  return {std::move(result), {},
+          skipped == 0 ? std::string{}
+                       : "recovered with " + std::to_string(skipped) +
+                             " invalid or disabled gesture/template entries"};
 }
 
 Value encode(const ProfileFile& file) {
@@ -420,18 +427,18 @@ DecodeResult<ProfileFile> decode_profiles(const Value& value) {
       const auto* decoded = encoded->get_if<bool>();
       if (decoded == nullptr) {
         ++skipped;
-        continue;
+        enabled = false;
+      } else {
+        enabled = *decoded;
       }
-      enabled = *decoded;
     }
     context::ApplicationProfile decoded{*id, *name, enabled, {}, {}};
     if (const auto* encoded_criteria = field(*profile, "criteria")) {
       const auto* criteria = encoded_criteria->get_if<Array>();
       if (criteria == nullptr) {
         ++skipped;
-        continue;
-      }
-      for (const auto& encoded_criterion : *criteria) {
+        decoded.enabled = false;
+      } else for (const auto& encoded_criterion : *criteria) {
         const auto* criterion = encoded_criterion.get_if<Object>();
         const auto* property_text =
             criterion == nullptr ? nullptr : field_as<std::string>(*criterion, "property");
@@ -447,14 +454,9 @@ DecodeResult<ProfileFile> decode_profiles(const Value& value) {
           continue;
         }
         context::MatchCriterion candidate{*property, *mode, *criterion_value};
-        if (candidate.mode == context::MatchMode::regex) {
-          try {
-            candidate.compiled_regex.emplace(candidate.value,
-                                             std::regex::ECMAScript | std::regex::icase);
-          } catch (const std::regex_error&) {
-            ++skipped;
-            continue;
-          }
+        if (!context::prepare_criterion(candidate)) {
+          ++skipped;
+          continue;
         }
         decoded.criteria.push_back(std::move(candidate));
       }
@@ -470,10 +472,10 @@ DecodeResult<ProfileFile> decode_profiles(const Value& value) {
     profile_ids.insert(*id);
     result.profiles.push_back(std::move(decoded));
   }
-  return {std::move(result), skipped == 0
-                                 ? std::string{}
-                                 : "recovered with " + std::to_string(skipped) +
-                                       " invalid or disabled profile/criterion/action entries"};
+  return {std::move(result), {},
+          skipped == 0 ? std::string{}
+                       : "recovered with " + std::to_string(skipped) +
+                             " invalid or disabled profile/criterion/action entries"};
 }
 
 }  // namespace strokes::config

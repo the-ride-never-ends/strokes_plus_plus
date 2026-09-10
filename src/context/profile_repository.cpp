@@ -1,7 +1,6 @@
 #include "context/profile_repository.h"
 
 #include <algorithm>
-#include <regex>
 #include <utility>
 
 #include "actions/keyboard_shortcut.h"
@@ -9,21 +8,6 @@
 
 namespace strokes::context {
 namespace {
-
-bool compile_criterion(MatchCriterion& criterion) {
-  if (criterion.value.empty()) return false;
-  if (criterion.mode == MatchMode::regex) {
-    try {
-      criterion.compiled_regex.emplace(criterion.value,
-                                       std::regex::ECMAScript | std::regex::icase);
-    } catch (const std::regex_error&) {
-      return false;
-    }
-  } else {
-    criterion.compiled_regex.reset();
-  }
-  return true;
-}
 
 bool valid_action(const actions::Action& action) {
   return action.type == actions::ActionType::keyboard_shortcut &&
@@ -64,7 +48,7 @@ bool ProfileRepository::erase(const std::string& id) { return detail::erase_id(p
 
 bool ProfileRepository::add_criterion(const std::string& id, MatchCriterion criterion) {
   auto* profile = find(id);
-  if (profile == nullptr || !compile_criterion(criterion)) return false;
+  if (profile == nullptr || !prepare_criterion(criterion)) return false;
   profile->criteria.push_back(std::move(criterion));
   return true;
 }
@@ -72,7 +56,7 @@ bool ProfileRepository::add_criterion(const std::string& id, MatchCriterion crit
 bool ProfileRepository::replace_criterion(const std::string& id, std::size_t index,
                                           MatchCriterion criterion) {
   auto* profile = find(id);
-  if (profile == nullptr || index >= profile->criteria.size() || !compile_criterion(criterion)) {
+  if (profile == nullptr || index >= profile->criteria.size() || !prepare_criterion(criterion)) {
     return false;
   }
   profile->criteria[index] = std::move(criterion);

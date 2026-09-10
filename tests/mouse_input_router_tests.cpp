@@ -78,6 +78,23 @@ void disabled_and_saturated_behavior() {
         "failed release delivery does not wedge input routing");
 }
 
+void disable_during_capture() {
+  std::vector<MouseInputEvent> delivered;
+  MouseInputRouter router([&](const auto& value) {
+    delivered.push_back(value);
+    return true;
+  });
+  (void)router.route(event(MouseEventType::button_down, 0, 0));
+  (void)router.route(event(MouseEventType::pointer_moved, 20, 0));
+  router.set_enabled(false);
+  check(!router.interaction_active() && delivered.back().type == MouseEventType::cancel,
+        "disabling during capture delivers cancellation and clears router state");
+  router.set_enabled(false);
+  router.configure({ActivationButton::middle, 5.0});
+  check(router.route(event(MouseEventType::button_up, 20, 0)).suppress_input,
+        "reconfiguration preserves pending release suppression");
+}
+
 void explicit_cancellation() {
   MouseInputRouter router([](const auto&) { return true; });
   check(!router.cancel_interaction(), "idle router has nothing to cancel");
@@ -143,6 +160,7 @@ void run_mouse_input_router_tests() {
   click_routing();
   gesture_and_unrelated_routing();
   disabled_and_saturated_behavior();
+  disable_during_capture();
   explicit_cancellation();
   invalid_sequence_cancellation();
   returning_to_origin();

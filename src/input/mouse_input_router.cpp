@@ -19,13 +19,18 @@ void MouseInputRouter::configure(Options options) {
   if (!std::isfinite(options.movement_threshold) || options.movement_threshold < 0.0) {
     throw std::invalid_argument("mouse movement threshold must be non-negative");
   }
-  cancelled_release_pending_ = interaction_active_;
+  cancelled_release_pending_ = cancelled_release_pending_ || interaction_active_;
   cancelled_button_ = options_.activation_button;
   options_ = std::move(options);
   clear_interaction();
 }
 
 MouseRouteResult MouseInputRouter::route(const MouseInputEvent& event) {
+  if (cancelled_release_pending_ && event.type == MouseEventType::button_up &&
+      event.button == cancelled_button_) {
+    cancelled_release_pending_ = false;
+    return {.suppress_input = true};
+  }
   if (!enabled_) {
     return {};
   }
@@ -41,18 +46,13 @@ MouseRouteResult MouseInputRouter::route(const MouseInputEvent& event) {
     cancelled_release_pending_ = false;
     start_position_ = event.position;
     const double scale =
-        options_.threshold_scale_provider ? options_.threshold_scale_provider() : 1.0;
+        options_.scale_provider ? options_.scale_provider() : 1.0;
     active_movement_threshold_ =
         options_.movement_threshold * (std::isfinite(scale) && scale > 0.0 ? scale : 1.0);
     return {.suppress_input = true, .event_delivered = true};
   }
 
   if (!interaction_active_) {
-    if (cancelled_release_pending_ && event.type == MouseEventType::button_up &&
-        event.button == cancelled_button_) {
-      cancelled_release_pending_ = false;
-      return {.suppress_input = true};
-    }
     return {};
   }
 
@@ -91,14 +91,22 @@ MouseRouteResult MouseInputRouter::route(const MouseInputEvent& event) {
 void MouseInputRouter::set_enabled(bool enabled) noexcept {
   enabled_ = enabled;
   if (!enabled_) {
-    cancelled_release_pending_ = interaction_active_;
+    if (interaction_active_) {
+      MouseInputEvent cancellation;
+      cancellation.type = MouseEventType::cancel;
+      try {
+        (void)deliver(cancellation);
+      } catch (...) {
+      }
+    }
+    cancelled_release_pending_ = cancelled_release_pending_ || interaction_active_;
     cancelled_button_ = options_.activation_button;
     clear_interaction();
   }
 }
 
 void MouseInputRouter::set_button(ActivationButton button) noexcept {
-  cancelled_release_pending_ = interaction_active_;
+  cancelled_release_pending_ = cancelled_release_pending_ || interaction_active_;
   cancelled_button_ = options_.activation_button;
   options_.activation_button = button;
   clear_interaction();
@@ -106,7 +114,7 @@ void MouseInputRouter::set_button(ActivationButton button) noexcept {
 
 bool MouseInputRouter::cancel_interaction() noexcept {
   const bool was_active = interaction_active_;
-  cancelled_release_pending_ = was_active;
+  cancelled_release_pending_ = cancelled_release_pending_ || was_active;
   cancelled_button_ = options_.activation_button;
   clear_interaction();
   return was_active;

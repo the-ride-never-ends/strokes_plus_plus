@@ -175,23 +175,37 @@ bool transactional_write(const std::filesystem::path& directory,
   std::array<bool, Size> committed{};
   std::error_code ec;
   const auto rollback = [&] {
+    bool succeeded = true;
+    std::string rollback_error;
+    const auto record_error = [&](const std::filesystem::path& path) {
+      if (!ec) return;
+      succeeded = false;
+      if (rollback_error.empty())
+        rollback_error = "cannot roll back " + path.string() + ": " + ec.message();
+      ec.clear();
+    };
     for (std::size_t index = 0; index < Size; ++index) {
       auto temporary = paths[index];
       temporary += ".tmp";
       if (committed[index]) std::filesystem::remove(paths[index], ec);
-      ec.clear();
+      record_error(paths[index]);
       auto backup = paths[index];
       backup += ".bak";
       if (backed_up[index]) std::filesystem::rename(backup, paths[index], ec);
-      ec.clear();
+      record_error(backup);
       auto missing = paths[index];
       missing += ".bak.missing";
       if (marked_missing[index]) std::filesystem::remove(missing, ec);
-      ec.clear();
+      record_error(missing);
       std::filesystem::remove(temporary, ec);
       ec.clear();
     }
-    std::filesystem::remove(marker, ec);
+    if (succeeded) {
+      std::filesystem::remove(marker, ec);
+      record_error(marker);
+    }
+    if (!succeeded) error += "; " + rollback_error + "; recovery marker retained";
+    return succeeded;
   };
 
   for (std::size_t index = 0; index < Size; ++index) {
@@ -320,7 +334,8 @@ bool load_component(const std::filesystem::path& path, const T& fallback, Decode
     auto decoded = decoder(*encoded);
     if (decoded) {
       output = std::move(*decoded.value);
-      if (!decoded.error.empty()) append_warning(warnings, path.string() + ": " + decoded.error);
+      if (!decoded.warning.empty())
+        append_warning(warnings, path.string() + ": " + decoded.warning);
       return true;
     }
     error = path.string() + ": " + decoded.error;

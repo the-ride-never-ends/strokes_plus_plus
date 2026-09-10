@@ -36,6 +36,15 @@ Stroke caret(double scale = 1.0, double offset_x = 0.0, double offset_y = 0.0) {
   return result;
 }
 
+Stroke circle(bool clockwise = true) {
+  Stroke result;
+  for (int i = 0; i <= 64; ++i) {
+    const double angle = (clockwise ? 1.0 : -1.0) * 2.0 * 3.141592653589793 * i / 64.0;
+    result.push_back({std::cos(angle) * 50.0, std::sin(angle) * 50.0});
+  }
+  return result;
+}
+
 GestureDefinition gesture(std::string id, std::string name, Stroke points, bool enabled = true) {
   return {std::move(id), std::move(name), enabled, {{"template-1", std::move(points)}}};
 }
@@ -122,6 +131,15 @@ void threshold_tests() {
         "higher threshold rejects weak match");
 }
 
+void closed_shape_tests() {
+  Recognizer recognizer(0.90);
+  check(recognizer.add_gesture(gesture("circle", "Circle", circle())),
+        "closed circle template is accepted");
+  const auto matched = recognizer.recognize(circle());
+  check(matched && matched->gesture_id == "circle", "closed circle is recognized");
+  check(!recognizer.recognize(circle(false)), "circle direction remains significant");
+}
+
 }  // namespace
 
 int main() {
@@ -129,6 +147,7 @@ int main() {
   recognition_tests();
   orientation_and_library_tests();
   threshold_tests();
+  closed_shape_tests();
   strokes::tests::run_state_machine_tests();
   strokes::tests::run_profile_tests();
   strokes::tests::run_keyboard_action_tests();

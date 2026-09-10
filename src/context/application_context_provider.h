@@ -12,7 +12,7 @@ class IApplicationContextProvider {
  public:
   virtual ~IApplicationContextProvider() = default;
   [[nodiscard]] virtual std::optional<ApplicationContext> foreground_application() const = 0;
-  [[nodiscard]] virtual std::optional<ApplicationContext> application_for_window(
+  [[nodiscard]] virtual std::optional<ApplicationContext> window_application(
       std::uintptr_t) const {
     return foreground_application();
   }

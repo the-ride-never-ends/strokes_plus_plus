@@ -25,4 +25,7 @@ class StrokeNormalizer {
   double square_size_;
 };
 
+/// Returns the project-wide normalizer used for validation and recognition.
+[[nodiscard]] inline StrokeNormalizer default_normalizer() { return StrokeNormalizer{}; }
+
 }  // namespace strokes::gestures

@@ -21,6 +21,7 @@ class WindowsSettingsWindow final {
   void rename_gesture();
   void delete_gesture();
   void train_gesture();
+  void remove_gesture_sample();
   void toggle_gesture();
   void add_profile();
   void update_profile();

@@ -39,8 +39,22 @@ void global_tests() {
         "unbounded maximum point counts are rejected");
   auto clamped = decode_options(
       json::Object{{"movement_threshold", 1.0}, {"minimum_point_distance", 2.0}});
-  check(clamped && clamped.value->minimum_point_distance == 1.0 && !clamped.error.empty(),
+  check(clamped && clamped.value->minimum_point_distance == 1.0 && !clamped.warning.empty() &&
+            clamped.error.empty(),
         "point distance is recoverably clamped to the movement threshold");
+  for (auto [field, value] :
+       std::initializer_list<std::pair<const char*, json::Value>>{
+           {"movement_threshold", -1.0}, {"minimum_point_distance", 1001.0},
+           {"maximum_points", 1.0}, {"recognition_threshold", -0.1}}) {
+    check(!decode_options(json::Object{{field, std::move(value)}}),
+          std::string("invalid bound is rejected for ") + field);
+  }
+  check(!decode_options(json::Object{{"overlay", json::Object{{"line_width", 101.0}}}}),
+        "oversized overlay line width is rejected");
+  check(!decode_options(json::Object{{"overlay", json::Object{{"opacity", 0.0}}}}),
+        "zero overlay opacity is rejected");
+  check(!decode_options(json::Object{{"overlay", json::Object{{"color", 0.0}}}}),
+        "black overlay color is rejected");
 
   const auto documented = json::parse(R"({
         "gesture_button": "right",
@@ -71,14 +85,14 @@ void gesture_tests() {
   invalid.gestures.push_back({"bad", "Bad", true, {}});
   auto recovered = decode_gestures(encode(invalid));
   check(recovered && recovered.value->gestures.size() == 1 &&
-            !recovered.value->gestures[0].enabled && !recovered.error.empty(),
+            !recovered.value->gestures[0].enabled && !recovered.warning.empty(),
         "untrained gesture is retained but disabled with a warning");
 
   auto mixed = encode(input);
   auto* gestures = mixed.get_if<json::Object>()->at("gestures").get_if<json::Array>();
   gestures->push_back(json::Object{{"id", "broken"}});
   recovered = decode_gestures(mixed);
-  check(recovered && recovered.value->gestures.size() == 1 && !recovered.error.empty(),
+  check(recovered && recovered.value->gestures.size() == 1 && !recovered.warning.empty(),
         "valid gestures survive a malformed sibling entry");
 
   const auto documented = json::parse(R"({
@@ -113,7 +127,7 @@ void profile_tests() {
   auto mixed = encode(input);
   mixed.get_if<json::Object>()->at("profiles").get_if<json::Array>()->push_back(false);
   result = decode_profiles(mixed);
-  check(result && result.value->profiles.size() == 1 && !result.error.empty(),
+  check(result && result.value->profiles.size() == 1 && !result.warning.empty(),
         "valid profiles survive a malformed sibling entry");
   auto malformed_actions = encode(input);
   malformed_actions.get_if<json::Object>()->at("profiles").get_if<json::Array>()->front()
@@ -122,6 +136,15 @@ void profile_tests() {
   check(result && result.value->profiles.size() == 1 &&
             result.value->profiles.front().actions_by_gesture.empty(),
         "malformed profile actions are discarded without dropping the profile");
+  auto malformed_fields = encode(input);
+  auto& profile = *malformed_fields.get_if<json::Object>()->at("profiles").get_if<json::Array>()->front()
+                       .get_if<json::Object>();
+  profile.insert_or_assign("enabled", "true");
+  profile.insert_or_assign("criteria", false);
+  result = decode_profiles(malformed_fields);
+  check(result && result.value->profiles.size() == 1 && !result.value->profiles.front().enabled &&
+            result.value->profiles.front().criteria.empty() && !result.warning.empty(),
+        "malformed profile fields retain the disabled parent record");
 
   const auto documented = json::parse(R"({
         "profiles": [{

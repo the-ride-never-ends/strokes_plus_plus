@@ -22,6 +22,7 @@ const ApplicationContext chrome{123, 456, "chrome.exe", "GitHub - Google Chrome"
                                 "Chrome_WidgetWin_1"};
 
 ApplicationProfile profile_with(MatchCriterion criterion) {
+  (void)context::prepare_criterion(criterion);
   return {"chrome", "Chrome", true, {std::move(criterion)}, {}};
 }
 

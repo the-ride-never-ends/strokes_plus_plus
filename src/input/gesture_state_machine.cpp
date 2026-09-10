@@ -50,10 +50,9 @@ GestureUpdate GestureStateMachine::button_down(GestureStart start) {
 }
 
 GestureUpdate GestureStateMachine::pointer_moved(gestures::Point position) {
-  if (session_) {
-    session_->current_position = position;
-    session_->last_movement_timestamp = GestureClock::now();
-  }
+  if (!session_) return {};
+  session_->current_position = position;
+  session_->last_movement_timestamp = GestureClock::now();
   if (state_ == GestureState::button_pending) {
     transition_to(GestureState::capturing);
     session_->captured_points.reserve(options_.maximum_points);

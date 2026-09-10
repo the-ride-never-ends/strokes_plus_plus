@@ -3,7 +3,10 @@
 #include <TlHelp32.h>
 
 #include <algorithm>
+#include <array>
 #include <cwchar>
+#include <limits>
+#include <optional>
 #include <regex>
 #include <string>
 #include <utility>
@@ -34,6 +37,7 @@ enum : int {
   gesture_rename_id,
   gesture_delete_id,
   gesture_train_id,
+  gesture_remove_sample_id,
   gesture_toggle_id,
   profiles_id,
   profile_name_id,
@@ -55,6 +59,8 @@ enum : int {
   cancel_id
 };
 void text(HWND parent, int id, const wchar_t* value, int x, int y, int w = 170, int h = 22) {
+  static int next_label_id = 1000;
+  if (id == 0) id = next_label_id++;
   ::CreateWindowExW(0, L"STATIC", value, WS_CHILD | WS_VISIBLE, x, y, w, h, parent,
                     reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), nullptr, nullptr);
 }
@@ -88,14 +94,20 @@ bool read_integer(HWND window, int id, long low, long high, long& output) {
   output = parsed;
   return true;
 }
+std::optional<LRESULT> selected_combo(HWND window, int id, LRESULT count) {
+  const LRESULT selected = ::SendDlgItemMessageW(window, id, CB_GETCURSEL, 0, 0);
+  if (selected == CB_ERR || selected < 0 || selected >= count) return std::nullopt;
+  return selected;
+}
 std::string read_utf8(HWND window, int id) {
-  wchar_t value[256]{};
-  ::GetDlgItemTextW(window, id, value, 256);
-  const int length = static_cast<int>(std::wcslen(value));
+  const int length = ::GetWindowTextLengthW(::GetDlgItem(window, id));
   if (length == 0) return {};
-  const int needed = ::WideCharToMultiByte(CP_UTF8, 0, value, length, nullptr, 0, nullptr, nullptr);
+  std::wstring value(static_cast<std::size_t>(length) + 1, L'\0');
+  ::GetDlgItemTextW(window, id, value.data(), length + 1);
+  const int needed = ::WideCharToMultiByte(CP_UTF8, 0, value.data(), length, nullptr, 0, nullptr,
+                                           nullptr);
   std::string result(static_cast<std::size_t>(needed), '\0');
-  ::WideCharToMultiByte(CP_UTF8, 0, value, length, result.data(), needed, nullptr, nullptr);
+  ::WideCharToMultiByte(CP_UTF8, 0, value.data(), length, result.data(), needed, nullptr, nullptr);
   return result;
 }
 std::wstring wide(std::string_view value) {
@@ -126,6 +138,15 @@ BOOL CALLBACK apply_font(HWND window, LPARAM font) {
   ::SendMessageW(window, WM_SETFONT, static_cast<WPARAM>(font), TRUE);
   return TRUE;
 }
+constexpr std::array<input::ActivationButton, 4> configurable_buttons{
+    input::ActivationButton::right, input::ActivationButton::middle,
+    input::ActivationButton::x_button_1, input::ActivationButton::x_button_2};
+
+std::optional<std::size_t> button_index(input::ActivationButton button) {
+  const auto found = std::ranges::find(configurable_buttons, button);
+  if (found == configurable_buttons.end()) return std::nullopt;
+  return static_cast<std::size_t>(found - configurable_buttons.begin());
+}
 }  // namespace
 
 bool WindowsSettingsWindow::show(HINSTANCE instance, config::ConfigurationBundle& configuration) {
@@ -141,21 +162,28 @@ bool WindowsSettingsWindow::show(HINSTANCE instance, config::ConfigurationBundle
   wc.lpszClassName = class_name;
   wc.hCursor = ::LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
   wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-  if (::RegisterClassExW(&wc) == 0 && ::GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
+  const ATOM registered = ::RegisterClassExW(&wc);
+  if (registered == 0 && ::GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
   window_ =
       ::CreateWindowExW(WS_EX_APPWINDOW, class_name, L"Strokes++ Settings",
                         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, CW_USEDEFAULT,
                         CW_USEDEFAULT, 680, 760, nullptr, nullptr, instance_, this);
-  if (!window_) return false;
+  if (!window_) {
+    if (registered != 0) ::UnregisterClassW(class_name, instance_);
+    return false;
+  }
   ::ShowWindow(window_, SW_SHOW);
   ::UpdateWindow(window_);
   MSG message{};
   while (!finished_ && ::GetMessageW(&message, nullptr, 0, 0) > 0) {
-    ::TranslateMessage(&message);
-    ::DispatchMessageW(&message);
+    if (!::IsDialogMessageW(window_, &message)) {
+      ::TranslateMessage(&message);
+      ::DispatchMessageW(&message);
+    }
   }
   if (message.message == WM_QUIT) ::PostQuitMessage(static_cast<int>(message.wParam));
   if (accepted_) *destination_ = std::move(working_);
+  if (registered != 0) ::UnregisterClassW(class_name, instance_);
   return accepted_;
 }
 
@@ -212,6 +240,10 @@ LRESULT WindowsSettingsWindow::handle_message(UINT message, WPARAM wp, LPARAM lp
     }
     if (LOWORD(wp) == gesture_train_id) {
       train_gesture();
+      return 0;
+    }
+    if (LOWORD(wp) == gesture_remove_sample_id) {
+      remove_gesture_sample();
       return 0;
     }
     if (LOWORD(wp) == gesture_toggle_id) {
@@ -309,6 +341,8 @@ void WindowsSettingsWindow::create_controls() {
   control(window_, L"BUTTON", L"Rename", BS_PUSHBUTTON, gesture_rename_id, 454, 224, 62, 26);
   control(window_, L"BUTTON", L"Delete", BS_PUSHBUTTON, gesture_delete_id, 520, 224, 50, 26);
   control(window_, L"BUTTON", L"Train", BS_PUSHBUTTON, gesture_train_id, 574, 224, 50, 26);
+  control(window_, L"BUTTON", L"Remove last sample", BS_PUSHBUTTON, gesture_remove_sample_id, 400,
+          254, 96, 26);
   control(window_, L"BUTTON", L"Enable / Disable", BS_PUSHBUTTON, gesture_toggle_id, 500, 254, 124,
           26);
   text(window_, 0, L"Application profiles", 410, 294);
@@ -386,7 +420,8 @@ void WindowsSettingsWindow::rescale_children(UINT old_dpi, UINT new_dpi) noexcep
 void WindowsSettingsWindow::load_values() {
   auto& c = configuration_->global;
   ::CheckDlgButton(window_, enabled_id, c.gestures_enabled ? BST_CHECKED : BST_UNCHECKED);
-  ::SendDlgItemMessageW(window_, button_id, CB_SETCURSEL, static_cast<WPARAM>(c.gesture_button), 0);
+  const auto selected_button = button_index(c.gesture_button).value_or(0);
+  ::SendDlgItemMessageW(window_, button_id, CB_SETCURSEL, selected_button, 0);
   ::SetDlgItemTextW(window_, move_id, number(c.movement_threshold).c_str());
   ::SetDlgItemTextW(window_, distance_id, number(c.minimum_point_distance).c_str());
   ::SetDlgItemTextW(window_, max_id, integer(c.maximum_points).c_str());
@@ -561,7 +596,7 @@ void WindowsSettingsWindow::train_gesture() {
   if (selected < 0) return;
   ::EnableWindow(window_, FALSE);
   WindowsGestureTrainer trainer;
-  auto stroke = trainer.capture(instance_, configuration_->global.minimum_point_distance);
+  auto stroke = trainer.capture(instance_, configuration_->global.minimum_point_distance, window_);
   ::EnableWindow(window_, TRUE);
   ::SetForegroundWindow(window_);
   if (!stroke) return;
@@ -570,6 +605,17 @@ void WindowsSettingsWindow::train_gesture() {
   const std::string id = "template-" + std::to_string(::GetTickCount64());
   if (repository.add_template(definition.id, {id, std::move(*stroke)}))
     (void)repository.set_enabled(definition.id, true);
+  refresh_gestures();
+  ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, selected, 0);
+}
+
+void WindowsSettingsWindow::remove_gesture_sample() {
+  const int selected = selected_gesture();
+  if (selected < 0) return;
+  auto& gesture = configuration_->gestures.gestures[static_cast<std::size_t>(selected)];
+  if (gesture.templates.empty()) return;
+  gestures::GestureRepository repository(configuration_->gestures.gestures);
+  (void)repository.remove_template(gesture.id, gesture.templates.back().id);
   refresh_gestures();
   ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, selected, 0);
 }
@@ -592,15 +638,15 @@ void WindowsSettingsWindow::toggle_gesture() {
 void WindowsSettingsWindow::add_profile() {
   const std::string name = read_utf8(window_, profile_name_id);
   const std::string value = read_utf8(window_, profile_value_id);
-  const auto property = static_cast<context::ApplicationProperty>(
-      ::SendDlgItemMessageW(window_, profile_property_id, CB_GETCURSEL, 0, 0));
-  const auto mode = static_cast<context::MatchMode>(
-      ::SendDlgItemMessageW(window_, profile_mode_id, CB_GETCURSEL, 0, 0));
-  if (name.empty() || value.empty()) {
+  const auto property_selection = selected_combo(window_, profile_property_id, 3);
+  const auto mode_selection = selected_combo(window_, profile_mode_id, 3);
+  if (name.empty() || value.empty() || !property_selection || !mode_selection) {
     ::MessageBoxW(window_, L"Enter a unique profile name and match value.", L"Strokes++",
                   MB_OK | MB_ICONERROR);
     return;
   }
+  const auto property = static_cast<context::ApplicationProperty>(*property_selection);
+  const auto mode = static_cast<context::MatchMode>(*mode_selection);
   context::ProfileRepository repository(configuration_->profiles.profiles);
   std::string id = "profile-" + std::to_string(::GetTickCount64());
   if (!repository.create(id, name)) {
@@ -666,10 +712,11 @@ void WindowsSettingsWindow::add_criterion() {
   const int selected = selected_profile();
   if (selected < 0) return;
   const std::string value = read_utf8(window_, profile_value_id);
-  const auto property = static_cast<context::ApplicationProperty>(
-      ::SendDlgItemMessageW(window_, profile_property_id, CB_GETCURSEL, 0, 0));
-  const auto mode = static_cast<context::MatchMode>(
-      ::SendDlgItemMessageW(window_, profile_mode_id, CB_GETCURSEL, 0, 0));
+  const auto property_selection = selected_combo(window_, profile_property_id, 3);
+  const auto mode_selection = selected_combo(window_, profile_mode_id, 3);
+  if (!property_selection || !mode_selection) return;
+  const auto property = static_cast<context::ApplicationProperty>(*property_selection);
+  const auto mode = static_cast<context::MatchMode>(*mode_selection);
   context::ProfileRepository repository(configuration_->profiles.profiles);
   auto& profile = configuration_->profiles.profiles[static_cast<std::size_t>(selected)];
   if (!repository.add_criterion(profile.id, {property, mode, value})) {
@@ -684,10 +731,11 @@ void WindowsSettingsWindow::update_criterion() {
   const int selected = selected_profile(), criterion = selected_criterion();
   if (selected < 0 || criterion < 0) return;
   const std::string value = read_utf8(window_, profile_value_id);
-  const auto property = static_cast<context::ApplicationProperty>(
-      ::SendDlgItemMessageW(window_, profile_property_id, CB_GETCURSEL, 0, 0));
-  const auto mode = static_cast<context::MatchMode>(
-      ::SendDlgItemMessageW(window_, profile_mode_id, CB_GETCURSEL, 0, 0));
+  const auto property_selection = selected_combo(window_, profile_property_id, 3);
+  const auto mode_selection = selected_combo(window_, profile_mode_id, 3);
+  if (!property_selection || !mode_selection) return;
+  const auto property = static_cast<context::ApplicationProperty>(*property_selection);
+  const auto mode = static_cast<context::MatchMode>(*mode_selection);
   context::ProfileRepository repository(configuration_->profiles.profiles);
   const auto& id = configuration_->profiles.profiles[static_cast<std::size_t>(selected)].id;
   if (!repository.replace_criterion(id, static_cast<std::size_t>(criterion),
@@ -760,22 +808,19 @@ bool WindowsSettingsWindow::save_values() {
       !read_double(window_, threshold_id, 0, 1, threshold) ||
       !read_integer(window_, width_id, 1, config::GlobalOptions::maximum_overlay_line_width,
                     width) ||
-      !read_double(window_, opacity_id, 0, 1, opacity)) {
+      !read_double(window_, opacity_id, std::numeric_limits<double>::min(), 1, opacity)) {
     ::MessageBoxW(window_, L"One or more numeric settings are invalid.", L"Strokes++",
                   MB_OK | MB_ICONERROR);
     return false;
   }
   if (distance > movement) distance = movement;
-  wchar_t shortcut[128]{};
-  ::GetDlgItemTextW(window_, shortcut_id, shortcut, 128);
-  std::string shortcut_text;
-  for (const wchar_t* p = shortcut; *p; ++p) {
-    if (*p > 127) {
+  const std::string shortcut_text = read_utf8(window_, shortcut_id);
+  for (const unsigned char value : shortcut_text) {
+    if (value > 127) {
       ::MessageBoxW(window_, L"Shortcut must use ASCII key names.", L"Strokes++",
                     MB_OK | MB_ICONERROR);
       return false;
     }
-    shortcut_text.push_back(static_cast<char>(*p));
   }
   const int gesture_selected = selected_gesture();
   if (!shortcut_text.empty() && !actions::parse_shortcut(shortcut_text)) {
@@ -783,12 +828,18 @@ bool WindowsSettingsWindow::save_values() {
     return false;
   }
   const LRESULT button_selected = ::SendDlgItemMessageW(window_, button_id, CB_GETCURSEL, 0, 0);
+  if (button_selected == CB_ERR || button_selected < 0 ||
+      static_cast<std::size_t>(button_selected) >= configurable_buttons.size()) {
+    ::MessageBoxW(window_, L"Select a valid activation button.", L"Strokes++",
+                  MB_OK | MB_ICONERROR);
+    return false;
+  }
   if (button_selected < 0 || button_selected > 3) {
     ::MessageBoxW(window_, L"Select an activation button.", L"Strokes++", MB_OK | MB_ICONERROR);
     return false;
   }
   copy.global.gestures_enabled = ::IsDlgButtonChecked(window_, enabled_id) == BST_CHECKED;
-  copy.global.gesture_button = static_cast<input::ActivationButton>(button_selected);
+  copy.global.gesture_button = configurable_buttons[static_cast<std::size_t>(button_selected)];
   copy.global.movement_threshold = movement;
   copy.global.minimum_point_distance = distance;
   copy.global.maximum_points = static_cast<std::size_t>(maximum);

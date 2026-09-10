@@ -29,6 +29,19 @@ struct MatchCriterion {
   std::optional<std::regex> compiled_regex;
 };
 
+/// Validates a criterion and caches its regular expression when required.
+[[nodiscard]] inline bool prepare_criterion(MatchCriterion& criterion) {
+  if (criterion.value.empty()) return false;
+  criterion.compiled_regex.reset();
+  if (criterion.mode != MatchMode::regex) return true;
+  try {
+    criterion.compiled_regex.emplace(criterion.value, std::regex::ECMAScript | std::regex::icase);
+    return true;
+  } catch (const std::regex_error&) {
+    return false;
+  }
+}
+
 struct ApplicationProfile {
   std::string id;
   std::string name;

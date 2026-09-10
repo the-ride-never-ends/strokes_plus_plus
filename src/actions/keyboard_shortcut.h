@@ -31,6 +31,12 @@ enum class VirtualKey : std::uint16_t {
   letter_a = 0x41,
   left_windows = 0x5B,
   right_windows = 0x5C,
+  left_shift = 0xA0,
+  right_shift = 0xA1,
+  left_control = 0xA2,
+  right_control = 0xA3,
+  left_alt = 0xA4,
+  right_alt = 0xA5,
   f1 = 0x70,
 };
 

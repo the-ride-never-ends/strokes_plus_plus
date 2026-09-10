@@ -74,7 +74,8 @@ void profile_matching_performance() {
   constexpr int iterations = 1000;
   const auto start = std::chrono::steady_clock::now();
   bool matched = true;
-  for (int index = 0; index < iterations; ++index) matched = matcher.matches(profile, application);
+  for (int index = 0; index < iterations; ++index)
+    matched = matcher.matches(profile, application) && matched;
   const auto elapsed = std::chrono::steady_clock::now() - start;
   const auto average = std::chrono::duration<double, std::milli>(elapsed).count() / iterations;
   check(matched && average < 10.0, "profile resolution remains within the recognition budget");

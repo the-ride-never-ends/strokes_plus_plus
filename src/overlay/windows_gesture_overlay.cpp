@@ -71,8 +71,13 @@ void WindowsGestureOverlay::update(const gestures::Stroke& points) {
   if (!options_.enabled || window_ == nullptr) return;
   {
     std::scoped_lock lock(points_mutex_);
-    points_.insert(points_.end(), points.begin() + static_cast<std::ptrdiff_t>(points_.size()),
-                   points.end());
+    if (points.size() < points_.size()) {
+      points_ = points;
+      painted_points_ = 0;
+    } else {
+      points_.insert(points_.end(), points.begin() + static_cast<std::ptrdiff_t>(points_.size()),
+                     points.end());
+    }
   }
   if (!refresh_pending_.exchange(true, std::memory_order_acq_rel))
     ::PostMessageW(window_, refresh_message, generation_.load(std::memory_order_acquire), 0);

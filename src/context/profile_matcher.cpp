@@ -152,16 +152,8 @@ bool ProfileMatcher::matches_criterion(const MatchCriterion& criterion,
     case MatchMode::contains:
       return lowercase(actual).find(lowercase(criterion.value)) != std::string::npos;
     case MatchMode::regex:
-      try {
-        if (criterion.compiled_regex) {
-          return std::regex_search(actual.begin(), actual.end(), *criterion.compiled_regex);
-        }
-        return std::regex_search(
-            actual.begin(), actual.end(),
-            std::regex(criterion.value, std::regex::ECMAScript | std::regex::icase));
-      } catch (const std::regex_error&) {
-        return false;
-      }
+      return criterion.compiled_regex &&
+             std::regex_search(actual.begin(), actual.end(), *criterion.compiled_regex);
   }
   return false;
 }

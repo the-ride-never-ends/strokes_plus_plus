@@ -2,6 +2,7 @@
 #include <thread>
 
 #include "input/input_queue.h"
+#include "input/event_pump.h"
 #include "test_support.h"
 
 namespace strokes::tests {
@@ -45,6 +46,21 @@ void run_input_queue_tests() {
   producer.join();
   check(expected == item_count && order_preserved.load(std::memory_order_relaxed),
         "two-thread SPSC traffic preserves FIFO order without loss");
+
+  input::EventPump<int, 256> pump;
+  std::atomic<bool> pump_ordered{true};
+  std::jthread pump_consumer([&] {
+    for (int value = 0; value < item_count; ++value) {
+      const auto received = pump.wait_pop();
+      if (!received || *received != value) pump_ordered.store(false, std::memory_order_relaxed);
+    }
+  });
+  for (int value = 0; value < item_count; ++value) {
+    while (!pump.push(value)) std::this_thread::yield();
+  }
+  pump_consumer.join();
+  check(pump_ordered.load(std::memory_order_relaxed),
+        "event pump wakes for every accepted item without stranding work");
 }
 
 }  // namespace strokes::tests

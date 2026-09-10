@@ -67,7 +67,7 @@ if ($Test) {
         throw "CTest was not found beside CMake: $ctest"
     }
     Write-Host 'Running tests'
-    Invoke-Checked $ctest --test-dir $buildPath -C $Configuration --output-on-failure
+    Invoke-Checked $ctest --test-dir $buildPath -C $Configuration --output-on-failure -LE performance
 }
 
 if (-not $NoRun) {

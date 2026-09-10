@@ -11,7 +11,8 @@ namespace strokes::ui {
 class WindowsGestureTrainer final {
  public:
   [[nodiscard]] std::optional<gestures::Stroke> capture(HINSTANCE instance,
-                                                        double minimum_point_distance);
+                                                        double minimum_point_distance,
+                                                        HWND owner = nullptr);
 
  private:
   static LRESULT CALLBACK window_proc(HWND, UINT, WPARAM, LPARAM);

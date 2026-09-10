@@ -4,6 +4,43 @@ All notable changes to Strokes++ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The project does not yet have a versioned release.
 
+## [0.3.0]
+
+### Changed
+
+- Coupled the input queue and its semaphore in a testable event pump with one wake token per
+  accepted event, eliminating the producer-side empty-state race.
+- Split recoverable decoder warnings from fatal errors, centralized match-criterion preparation
+  and default normalizer construction, and generated numeric validation messages from their
+  canonical limits.
+- Added sided Shift, Control, and Alt handling and moved physical-modifier restoration into a
+  second injection pass so released modifiers are not re-pressed.
+- Added keyboard navigation to Settings, dynamic-length UTF-8 field reads, validated combo-box
+  selections, unique label identifiers, an owned gesture trainer, and training-sample removal.
+- Excluded wall-clock performance tests from the development runner's default test pass and
+  tightened the idle CPU gate over a longer sample.
+
+### Fixed
+
+- Retained gestures and profiles when their optional `enabled` or `criteria` fields are malformed,
+  disabling affected records instead of silently deleting them on the next save.
+- Preserved pending mouse-release suppression across disable and reconfiguration operations, and
+  made disabling an active interaction deliver cancellation at the router boundary.
+- Kept logging usable after a failed rotation, reported logger startup failure, retained the
+  configuration transaction marker after rollback failure, and surfaced hook-restart failure by
+  disabling the tray and stored engine state.
+- Rejected invisible overlays, unsupported left-button click replay, invalid combo selections, and
+  shrinking overlay stroke updates without invoking undefined behavior.
+- Made activation-button serialization round-trip every enum value, removed raw enum-order casts
+  from Settings, and unregistered the Settings window class when its owning instance registered it.
+
+### Tests
+
+- Added regressions for event-pump wake-up reliability, closed and direction-sensitive circles,
+  captured-window context lookup, disable-during-capture, modifier release during injection,
+  malformed optional record fields, and every bounded global option.
+- Strengthened exact batch-count and repeated profile-match assertions.
+
 ## [0.2.0]
 
 ### Changed

@@ -10,7 +10,8 @@ constexpr wchar_t class_name[] = L"StrokesPlusPlusGestureTrainer";
 }
 
 std::optional<gestures::Stroke> WindowsGestureTrainer::capture(HINSTANCE instance,
-                                                               double minimum_point_distance) {
+                                                               double minimum_point_distance,
+                                                               HWND owner) {
   if (!std::isfinite(minimum_point_distance) || minimum_point_distance < 0.0) return {};
   instance_ = instance;
   minimum_point_distance_ = minimum_point_distance;
@@ -28,7 +29,7 @@ std::optional<gestures::Stroke> WindowsGestureTrainer::capture(HINSTANCE instanc
   if (registered == 0 && ::GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return {};
   window_ = ::CreateWindowExW(WS_EX_APPWINDOW, class_name, L"Draw Gesture - Escape to Cancel",
                               WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT,
-                              600, 460, nullptr, nullptr, instance_, this);
+                              600, 460, owner, nullptr, instance_, this);
   if (!window_) {
     if (registered != 0) ::UnregisterClassW(class_name, instance_);
     return {};

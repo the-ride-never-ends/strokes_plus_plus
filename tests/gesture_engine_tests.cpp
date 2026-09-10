@@ -18,7 +18,12 @@ class FixedContext final : public IApplicationContextProvider {
  public:
   ApplicationContext value;
   bool available{true};
+  mutable std::uintptr_t requested_window{};
   std::optional<ApplicationContext> foreground_application() const override {
+    return available ? std::optional<ApplicationContext>{value} : std::nullopt;
+  }
+  std::optional<ApplicationContext> window_application(std::uintptr_t window) const override {
+    requested_window = window;
     return available ? std::optional<ApplicationContext>{value} : std::nullopt;
   }
 };
@@ -76,8 +81,8 @@ class FakeFeedback final : public IGestureFeedback {
 
 Stroke right_line() { return {{0, 0}, {10, 0}, {20, 0}, {30, 0}}; }
 
-MouseInputEvent mouse(MouseEventType type, double x, double y) {
-  return {type, {x, y}, ActivationButton::right, {}};
+MouseInputEvent mouse(MouseEventType type, double x, double y, std::uintptr_t target = 0) {
+  return {type, {x, y}, ActivationButton::right, {}, target};
 }
 
 struct Fixture {
@@ -136,7 +141,9 @@ void profile_override_and_context_snapshot() {
                               {{"right", {ActionType::keyboard_shortcut, "CTRL+W"}}}});
   fixture.modifiers.value.control = true;
   auto engine = fixture.engine();
-  (void)engine.process(mouse(MouseEventType::button_down, 0, 0));
+  (void)engine.process(mouse(MouseEventType::button_down, 0, 0, 0x1234));
+  check(fixture.context.requested_window == 0x1234,
+        "gesture activation resolves context for the captured target window");
   fixture.context.value.executable_name = "notepad.exe";
   (void)engine.process(mouse(MouseEventType::pointer_moved, 10, 0));
   const auto result = engine.process(mouse(MouseEventType::button_up, 30, 0));

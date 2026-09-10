@@ -29,7 +29,7 @@ struct RecognitionResult {
 /// Matches normalized single-stroke input against enabled gesture templates.
 class Recognizer {
  public:
-  explicit Recognizer(double threshold = 0.80, StrokeNormalizer normalizer = StrokeNormalizer());
+  explicit Recognizer(double threshold = 0.80, StrokeNormalizer normalizer = default_normalizer());
 
   [[nodiscard]] bool add_gesture(GestureDefinition gesture);
   void clear() noexcept;

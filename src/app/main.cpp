@@ -5,7 +5,7 @@
 #include "context/windows_application_context.h"
 #include "engine/gesture_engine.h"
 #include "gestures/recognizer.h"
-#include "input/input_queue.h"
+#include "input/event_pump.h"
 #include "input/mouse_input_router.h"
 #include "input/windows_keyboard_hook.h"
 #include "input/windows_modifier_state.h"
@@ -30,7 +30,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <semaphore>
 #include <stop_token>
 #include <thread>
 #include <utility>
@@ -54,6 +53,9 @@ class EngineHost {
     configuration_directory_ = *directory;
     refresh_scale(::GetForegroundWindow());
     logger_ = std::make_unique<logging::StructuredLogger>(*directory / "logs" / "strokes.log");
+    if (!logger_->ready()) {
+      startup_error_ = "Logging could not be started. The application will continue without logs.";
+    }
     (void)logger_->log("application_start");
     config::ConfigurationStore store(*directory);
     auto loaded = store.load();
@@ -95,7 +97,7 @@ class EngineHost {
         ::MessageBoxW(nullptr, L"The gesture overlay could not be created.",
                       L"Strokes++ Startup Error", MB_OK | MB_ICONERROR);
       worker_.request_stop();
-      wake_.release();
+      events_.wake();
       return false;
     }
     if (!tray_.create(instance, &EngineHost::handle_tray, this)) {
@@ -104,7 +106,7 @@ class EngineHost {
                       L"Strokes++ Startup Error", MB_OK | MB_ICONERROR);
       overlay_.destroy();
       worker_.request_stop();
-      wake_.release();
+      events_.wake();
       return false;
     }
     tray_.set_enabled(configuration_.global.gestures_enabled);
@@ -124,7 +126,7 @@ class EngineHost {
       tray_.destroy();
       overlay_.destroy();
       worker_.request_stop();
-      wake_.release();
+      events_.wake();
       stop_foreground();
       return false;
     }
@@ -136,7 +138,7 @@ class EngineHost {
       if (logger_) (void)logger_->log("hook_failure", {{"hook", "keyboard"}});
       tray_.destroy();
       worker_.request_stop();
-      wake_.release();
+      events_.wake();
       worker_.join();
       overlay_.destroy();
       stop_foreground();
@@ -154,7 +156,7 @@ class EngineHost {
         FILETIME created{}, exited{}, kernel_before{}, user_before{}, kernel_after{}, user_after{};
         const bool before = ::GetProcessTimes(::GetCurrentProcess(), &created, &exited,
                                               &kernel_before, &user_before) != FALSE;
-        ::Sleep(1000);
+        ::Sleep(5000);
         const bool after = ::GetProcessTimes(::GetCurrentProcess(), &created, &exited,
                                              &kernel_after, &user_after) != FALSE;
         PROCESS_MEMORY_COUNTERS counters{};
@@ -170,7 +172,7 @@ class EngineHost {
                                         10000.0
                                   : 1000.0;
         idle_test_passed_.store(
-            memory && cpu_ms < 25.0 && counters.WorkingSetSize < 50ull * 1024ull * 1024ull,
+            memory && cpu_ms < 50.0 && counters.WorkingSetSize < 50ull * 1024ull * 1024ull,
             std::memory_order_release);
         (void)::PostThreadMessageW(message_thread, WM_QUIT, 0, 0);
       });
@@ -184,7 +186,7 @@ class EngineHost {
     stop_foreground();
     tray_.destroy();
     worker_.request_stop();
-    wake_.release();
+    events_.wake();
     worker_.join();
     save_worker_.request_stop();
     save_wake_.notify_one();
@@ -197,13 +199,10 @@ class EngineHost {
  private:
   bool enqueue(const input::MouseInputEvent& event) noexcept {
     if (event.type == input::MouseEventType::pointer_moved &&
-        queue_.size_approx() >= queue_.usable_capacity() - 1) {
+        events_.size_approx() >= events_.usable_capacity() - 1) {
       return false;
     }
-    const bool was_empty = queue_.empty();
-    const bool queued = queue_.try_push(event);
-    if (queued && was_empty) wake_.release();
-    return queued;
+    return events_.push(event);
   }
 
   void refresh_scale(HWND window) noexcept {
@@ -259,9 +258,6 @@ class EngineHost {
         host.save_configuration();
       } else if (command == tray::TrayCommand::disable) {
         host.router_.set_enabled(false);
-        input::MouseInputEvent cancel;
-        cancel.type = input::MouseEventType::cancel;
-        (void)host.enqueue(cancel);
         host.tray_.set_enabled(false);
         host.configuration_.global.gestures_enabled = false;
         host.save_configuration();
@@ -271,10 +267,6 @@ class EngineHost {
         if (host.input_suspended_) return;
         host.input_suspended_ = true;
         host.router_.set_enabled(false);
-        (void)host.router_.cancel_interaction();
-        input::MouseInputEvent cancel;
-        cancel.type = input::MouseEventType::cancel;
-        (void)host.enqueue(cancel);
         host.keyboard_hook_.stop();
         host.hook_.stop();
         host.overlay_.hide();
@@ -361,11 +353,8 @@ class EngineHost {
       router_.set_enabled(false);
       keyboard_hook_.stop();
       hook_.stop();
-      input::MouseInputEvent cancel;
-      cancel.type = input::MouseEventType::cancel;
-      (void)enqueue(cancel);
       worker_.request_stop();
-      wake_.release();
+      events_.wake();
       worker_.join();
       overlay_.hide();
       flush_saves();
@@ -392,23 +381,29 @@ class EngineHost {
       }
       router_.set_enabled(configuration_.global.gestures_enabled);
       tray_.set_enabled(configuration_.global.gestures_enabled);
-      restart_input();
+      (void)restart_input();
     } catch (...) {
       ::MessageBoxW(nullptr, L"Settings could not be applied.", L"Strokes++", MB_OK | MB_ICONERROR);
       router_.set_enabled(configuration_.global.gestures_enabled);
-      restart_input();
+      (void)restart_input();
     }
   }
 
-  void restart_input() noexcept {
+  bool restart_input() noexcept {
     worker_ = std::jthread([this](std::stop_token stop) { engine_loop(stop); });
     if (!hook_.start(&EngineHost::handle_mouse, this) ||
         !keyboard_hook_.start(&EngineHost::on_escape, this)) {
       keyboard_hook_.stop();
       hook_.stop();
       router_.set_enabled(false);
+      configuration_.global.gestures_enabled = false;
+      tray_.set_enabled(false);
       if (logger_) (void)logger_->log("hook_failure", {{"phase", "settings_resume"}});
+      ::MessageBoxW(nullptr, L"Input hooks could not be restored. Gestures have been disabled.",
+                    L"Strokes++", MB_OK | MB_ICONERROR);
+      return false;
     }
+    return true;
   }
 
   void engine_loop(std::stop_token stop) {
@@ -420,7 +415,9 @@ class EngineHost {
         configuration_.global.overlay.enabled ? &overlay_ : nullptr);
 
     while (!stop.stop_requested()) {
-      while (const auto event = queue_.try_pop()) {
+      const auto event = events_.wait_pop();
+      if (stop.stop_requested()) break;
+      if (event) {
         try {
           process_event(engine, *event);
         } catch (const std::exception& exception) {
@@ -433,9 +430,8 @@ class EngineHost {
           if (logger_) (void)logger_->log("engine_error");
         }
       }
-      if (!stop.stop_requested()) wake_.acquire();
     }
-    while (const auto event = queue_.try_pop()) {
+    while (const auto event = events_.try_pop()) {
       try {
         process_event(engine, *event);
       } catch (...) {
@@ -498,8 +494,7 @@ class EngineHost {
   input::WindowsModifierStateProvider modifier_state_;
   input::WindowsMouseClick mouse_click_;
   actions::WindowsKeyboardInput keyboard_input_;
-  input::InputQueue<input::MouseInputEvent, 4096> queue_;
-  std::counting_semaphore<4097> wake_{0};
+  input::EventPump<input::MouseInputEvent, 4096> events_;
   std::mutex save_mutex_;
   std::condition_variable_any save_wake_;
   std::optional<config::ConfigurationBundle> pending_save_;
