@@ -22,6 +22,7 @@ class WindowsTrayIcon final {
   static LRESULT CALLBACK window_proc(HWND, UINT, WPARAM, LPARAM);
   LRESULT handle_message(UINT, WPARAM, LPARAM);
   void add_icon() noexcept;
+  void remove_icon() noexcept;
   void show_menu() noexcept;
   HINSTANCE instance_{};
   HWND window_{};
@@ -30,5 +31,7 @@ class WindowsTrayIcon final {
   bool enabled_{true};
   bool class_registered_{};
   UINT taskbar_created_{};
+  HICON enabled_icon_{};
+  HICON disabled_icon_{};
 };
 }  // namespace strokes::tray

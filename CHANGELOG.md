@@ -4,6 +4,28 @@ All notable changes to Strokes++ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The project does not yet have a versioned release.
 
+## [0.5.0]
+
+### Changed
+
+- Replaced the generic Windows notification-area glyphs with a distinct Strokes++ gesture icon
+  whose color reflects whether gesture handling is enabled.
+- Moved the runtime log to `logs.txt` beside the application executable and truncate it at startup
+  so each run contains only its own structured events.
+
+### Fixed
+
+- Made shutdown discard queued input instead of recognizing and executing stale gestures, removing
+  the visible delay when closing after heavy mouse activity.
+- Kept the installed input hooks stable while the Settings worker is paused, avoiding the transient
+  first-open hook restoration failure.
+- Removed the notification-area icon immediately when Exit is selected, before the remaining
+  worker and persistence cleanup completes.
+
+### Tests
+
+- Added regressions for discarding queued event-pump items and truncating logs between sessions.
+
 ## [0.4.0]
 
 ### Changed

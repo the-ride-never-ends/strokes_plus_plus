@@ -69,6 +69,10 @@ void run_input_queue_tests() {
   check(!drained.take().has_value(), "draining reports an empty queue");
   check(drained.push(3) && drained.wait_pop() == 3,
         "no surplus wake token survives a drain to strand the next item");
+  check(drained.push(4) && drained.push(5), "event pump accepts stale shutdown items");
+  drained.clear();
+  check(drained.size_approx() == 0 && !drained.take(),
+        "event pump clears stale items and their wake tokens");
 }
 
 }  // namespace strokes::tests

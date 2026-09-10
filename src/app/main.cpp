@@ -39,10 +39,21 @@ namespace {
 
 using namespace strokes;
 
+std::filesystem::path application_directory() {
+  std::vector<wchar_t> path(260);
+  for (;;) {
+    const DWORD length = ::GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+    if (length == 0) return std::filesystem::current_path();
+    if (length < path.size() - 1) return std::filesystem::path(path.data()).parent_path();
+    path.resize(path.size() * 2);
+  }
+}
+
 class EngineHost {
  public:
   explicit EngineHost(std::optional<std::filesystem::path> directory_override = std::nullopt)
       : router_([this](const input::MouseInputEvent& event) { return enqueue(event); }) {
+    const bool has_directory_override = directory_override.has_value();
     const auto directory =
         directory_override ? std::move(directory_override) : config::configuration_directory();
     if (!directory) {
@@ -52,7 +63,10 @@ class EngineHost {
     }
     configuration_directory_ = *directory;
     refresh_scale(::GetForegroundWindow());
-    logger_ = std::make_unique<logging::StructuredLogger>(*directory / "logs" / "strokes.log");
+    const auto log_path = has_directory_override ? *directory / "logs.txt"
+                                                 : application_directory() / "logs.txt";
+    logger_ = std::make_unique<logging::StructuredLogger>(
+        log_path, logging::StructuredLogger::OpenMode::truncate);
     if (!logger_->ready()) {
       startup_error_ = "Logging could not be started. The application will continue without logs.";
     }
@@ -188,6 +202,7 @@ class EngineHost {
     worker_.request_stop();
     events_.wake();
     worker_.join();
+    events_.clear();
     save_worker_.request_stop();
     save_wake_.notify_one();
     save_worker_.join();
@@ -352,11 +367,10 @@ class EngineHost {
   void open_settings() noexcept {
     try {
       router_.set_enabled(false);
-      keyboard_hook_.stop();
-      hook_.stop();
       worker_.request_stop();
       events_.wake();
       worker_.join();
+      events_.clear();
       overlay_.hide();
       flush_saves();
 
@@ -382,29 +396,17 @@ class EngineHost {
       }
       router_.set_enabled(configuration_.global.gestures_enabled);
       tray_.set_enabled(configuration_.global.gestures_enabled);
-      (void)restart_input();
+      restart_engine();
     } catch (...) {
       ::MessageBoxW(nullptr, L"Settings could not be applied.", L"Strokes++", MB_OK | MB_ICONERROR);
       router_.set_enabled(configuration_.global.gestures_enabled);
-      (void)restart_input();
+      restart_engine();
     }
   }
 
-  bool restart_input() noexcept {
+  void restart_engine() noexcept {
+    if (worker_.joinable()) return;
     worker_ = std::jthread([this](std::stop_token stop) { engine_loop(stop); });
-    if (!hook_.start(&EngineHost::handle_mouse, this) ||
-        !keyboard_hook_.start(&EngineHost::on_escape, this, physical_keys_)) {
-      keyboard_hook_.stop();
-      hook_.stop();
-      router_.set_enabled(false);
-      configuration_.global.gestures_enabled = false;
-      tray_.set_enabled(false);
-      if (logger_) (void)logger_->log("hook_failure", {{"phase", "settings_resume"}});
-      ::MessageBoxW(nullptr, L"Input hooks could not be restored. Gestures have been disabled.",
-                    L"Strokes++", MB_OK | MB_ICONERROR);
-      return false;
-    }
-    return true;
   }
 
   void engine_loop(std::stop_token stop) {
@@ -432,15 +434,8 @@ class EngineHost {
         }
       }
     }
-    while (const auto event = events_.take()) {
-      try {
-        process_event(engine, *event);
-      } catch (...) {
-        capturing_.store(false, std::memory_order_release);
-        overlay_.hide();
-        if (logger_) (void)logger_->log("engine_error", {{"phase", "shutdown_drain"}});
-      }
-    }
+    // Input already accepted before shutdown is stale and must not delay exit
+    // or be replayed when the settings window restarts this worker.
   }
 
   void process_event(engine::GestureEngine& engine, const input::MouseInputEvent& event) {

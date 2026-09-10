@@ -55,5 +55,5 @@ Windows may also deny process-image queries for elevated windows; in that case p
 profile matching is unavailable, while title and window-class criteria can still be used.
 
 The application performs no network communication, analytics, cloud synchronization, or
-update checks. Configuration and JSON Lines logs remain under
-`%LOCALAPPDATA%\StrokesPlusPlus`.
+update checks. Configuration remains under `%LOCALAPPDATA%\StrokesPlusPlus`; structured JSON
+Lines for the current run are written to `logs.txt` beside `GestureEngine.exe`.

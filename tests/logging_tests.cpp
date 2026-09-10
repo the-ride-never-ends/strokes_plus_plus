@@ -38,6 +38,23 @@ void run_logging_tests() {
   }
   check(records == 1 && std::filesystem::exists(directory / "strokes.log.1"),
         "logger rotates while the process remains running");
+
+  {
+    logging::StructuredLogger logger(directory / "session.log",
+                                     logging::StructuredLogger::OpenMode::truncate);
+    check(logger.log("first_session"), "truncating logger writes its first session");
+  }
+  {
+    logging::StructuredLogger logger(directory / "session.log",
+                                     logging::StructuredLogger::OpenMode::truncate);
+    check(logger.log("second_session"), "truncating logger writes its next session");
+  }
+  std::ifstream session(directory / "session.log");
+  const std::string contents((std::istreambuf_iterator<char>(session)),
+                             std::istreambuf_iterator<char>());
+  check(contents.find("first_session") == std::string::npos &&
+            contents.find("second_session") != std::string::npos,
+        "truncating logger overwrites the previous run");
   std::filesystem::remove_all(directory, error);
 }
 }  // namespace strokes::tests

@@ -37,6 +37,12 @@ class EventPump {
     return queue_.try_pop();
   }
 
+  /// Discards all currently queued items and their wake tokens.
+  void clear() noexcept {
+    while (take()) {
+    }
+  }
+
   [[nodiscard]] std::size_t size_approx() const noexcept { return queue_.size_approx(); }
   [[nodiscard]] constexpr std::size_t usable_capacity() const noexcept {
     return queue_.usable_capacity();

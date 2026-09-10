@@ -2,6 +2,8 @@
 
 #include <shellapi.h>
 
+#include <cstdint>
+
 namespace strokes::tray {
 namespace {
 constexpr wchar_t class_name[] = L"StrokesPlusPlusTrayWindow";
@@ -10,10 +12,49 @@ constexpr UINT icon_id = 1;
 constexpr UINT retry_timer_id = 1;
 constexpr UINT enable_id = 1001, disable_id = 1002, settings_id = 1003, exit_id = 1004;
 
-HICON status_icon(bool enabled) noexcept {
-  const WORD resource = enabled ? 32512 : 32515;  // OIC_APPLICATION / OIC_WARNING
-  return static_cast<HICON>(
-      ::LoadImageW(nullptr, MAKEINTRESOURCEW(resource), IMAGE_ICON, 16, 16, LR_SHARED));
+HICON create_status_icon(bool enabled) noexcept {
+  constexpr int size = 32;
+  BITMAPV5HEADER header{};
+  header.bV5Size = sizeof(header);
+  header.bV5Width = size;
+  header.bV5Height = -size;
+  header.bV5Planes = 1;
+  header.bV5BitCount = 32;
+  header.bV5Compression = BI_BITFIELDS;
+  header.bV5RedMask = 0x00FF0000;
+  header.bV5GreenMask = 0x0000FF00;
+  header.bV5BlueMask = 0x000000FF;
+  header.bV5AlphaMask = 0xFF000000;
+  void* bits = nullptr;
+  HDC screen = ::GetDC(nullptr);
+  HBITMAP color = ::CreateDIBSection(screen, reinterpret_cast<BITMAPINFO*>(&header), DIB_RGB_COLORS,
+                                     &bits, nullptr, 0);
+  if (screen) ::ReleaseDC(nullptr, screen);
+  if (!color || !bits) return nullptr;
+  auto* pixels = static_cast<std::uint32_t*>(bits);
+  const std::uint32_t fill = enabled ? 0xFF168B4B : 0xFF777777;
+  const std::uint32_t accent = enabled ? 0xFFFFFFFF : 0xFFDDDDDD;
+  for (int y = 0; y < size; ++y) {
+    for (int x = 0; x < size; ++x) {
+      const int dx = x - 15, dy = y - 15;
+      if (dx * dx + dy * dy <= 14 * 14) pixels[y * size + x] = fill;
+    }
+  }
+  // A compact, recognizable gesture stroke: down, right, then up.
+  for (int i = 0; i < 3; ++i) {
+    for (int y = 7; y <= 23; ++y) pixels[y * size + 9 + i] = accent;
+    for (int x = 9; x <= 22; ++x) pixels[(23 - i) * size + x] = accent;
+    for (int y = 15; y <= 23; ++y) pixels[y * size + 20 + i] = accent;
+  }
+  HBITMAP mask = ::CreateBitmap(size, size, 1, 1, nullptr);
+  ICONINFO info{};
+  info.fIcon = TRUE;
+  info.hbmColor = color;
+  info.hbmMask = mask;
+  HICON icon = mask ? ::CreateIconIndirect(&info) : nullptr;
+  if (mask) ::DeleteObject(mask);
+  ::DeleteObject(color);
+  return icon;
 }
 }  // namespace
 
@@ -24,6 +65,8 @@ bool WindowsTrayIcon::create(HINSTANCE instance, Handler handler, void* context)
   instance_ = instance;
   handler_ = handler;
   context_ = context;
+  enabled_icon_ = create_status_icon(true);
+  disabled_icon_ = create_status_icon(false);
   taskbar_created_ = ::RegisterWindowMessageW(L"TaskbarCreated");
   WNDCLASSEXW wc{sizeof(wc)};
   wc.lpfnWndProc = window_proc;
@@ -46,17 +89,18 @@ bool WindowsTrayIcon::create(HINSTANCE instance, Handler handler, void* context)
 }
 
 void WindowsTrayIcon::destroy() noexcept {
+  remove_icon();
   if (window_ != nullptr) {
-    NOTIFYICONDATAW icon{sizeof(icon)};
-    icon.hWnd = window_;
-    icon.uID = icon_id;
-    ::Shell_NotifyIconW(NIM_DELETE, &icon);
     ::DestroyWindow(window_);
     window_ = nullptr;
   }
   if (class_registered_ && instance_ != nullptr) ::UnregisterClassW(class_name, instance_);
   class_registered_ = false;
   instance_ = nullptr;
+  if (enabled_icon_) ::DestroyIcon(enabled_icon_);
+  if (disabled_icon_) ::DestroyIcon(disabled_icon_);
+  enabled_icon_ = nullptr;
+  disabled_icon_ = nullptr;
 }
 
 void WindowsTrayIcon::set_enabled(bool enabled) noexcept {
@@ -66,7 +110,7 @@ void WindowsTrayIcon::set_enabled(bool enabled) noexcept {
   icon.hWnd = window_;
   icon.uID = icon_id;
   icon.uFlags = NIF_ICON | NIF_TIP;
-  icon.hIcon = status_icon(enabled);
+  icon.hIcon = enabled ? enabled_icon_ : disabled_icon_;
   ::lstrcpynW(icon.szTip, enabled ? L"Strokes++ - Enabled" : L"Strokes++ - Disabled", 128);
   (void)::Shell_NotifyIconW(NIM_MODIFY, &icon);
 }
@@ -117,6 +161,7 @@ LRESULT WindowsTrayIcon::handle_message(UINT message, WPARAM wp, LPARAM lp) {
         handler_(TrayCommand::settings, context_);
         break;
       case exit_id:
+        remove_icon();
         handler_(TrayCommand::exit, context_);
         break;
       default:
@@ -133,7 +178,7 @@ void WindowsTrayIcon::add_icon() noexcept {
   icon.uID = icon_id;
   icon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
   icon.uCallbackMessage = callback_message;
-  icon.hIcon = status_icon(enabled_);
+  icon.hIcon = enabled_ ? enabled_icon_ : disabled_icon_;
   ::lstrcpynW(icon.szTip, enabled_ ? L"Strokes++ - Enabled" : L"Strokes++ - Disabled", 128);
   if (::Shell_NotifyIconW(NIM_ADD, &icon)) {
     ::KillTimer(window_, retry_timer_id);
@@ -141,6 +186,15 @@ void WindowsTrayIcon::add_icon() noexcept {
     (void)::Shell_NotifyIconW(NIM_SETVERSION, &icon);
   } else
     ::SetTimer(window_, retry_timer_id, 2000, nullptr);
+}
+
+void WindowsTrayIcon::remove_icon() noexcept {
+  if (window_ == nullptr) return;
+  ::KillTimer(window_, retry_timer_id);
+  NOTIFYICONDATAW icon{sizeof(icon)};
+  icon.hWnd = window_;
+  icon.uID = icon_id;
+  (void)::Shell_NotifyIconW(NIM_DELETE, &icon);
 }
 
 void WindowsTrayIcon::show_menu() noexcept {

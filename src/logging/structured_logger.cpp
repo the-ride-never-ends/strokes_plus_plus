@@ -8,14 +8,14 @@ namespace {
 constexpr std::uintmax_t maximum_log_size = 5U * 1024U * 1024U;
 }
 
-StructuredLogger::StructuredLogger(const std::filesystem::path& path) : path_(path) {
+StructuredLogger::StructuredLogger(const std::filesystem::path& path, OpenMode mode) : path_(path) {
   std::error_code error;
   std::filesystem::create_directories(path.parent_path(), error);
   if (error) return;
   const bool exists = std::filesystem::exists(path, error);
   if (error) return;
   const auto size = exists ? std::filesystem::file_size(path, error) : 0;
-  if (!error && exists && size >= maximum_log_size) {
+  if (!error && mode == OpenMode::append && exists && size >= maximum_log_size) {
     auto previous = path;
     previous += ".1";
     std::filesystem::remove(previous, error);
@@ -23,8 +23,9 @@ StructuredLogger::StructuredLogger(const std::filesystem::path& path) : path_(pa
     std::filesystem::rename(path, previous, error);
   }
   if (!error) {
-    output_.open(path, std::ios::binary | std::ios::app);
-    bytes_written_ = exists && size < maximum_log_size ? size : 0;
+    output_.open(path, std::ios::binary |
+                           (mode == OpenMode::truncate ? std::ios::trunc : std::ios::app));
+    bytes_written_ = mode == OpenMode::append && exists && size < maximum_log_size ? size : 0;
   }
 }
 

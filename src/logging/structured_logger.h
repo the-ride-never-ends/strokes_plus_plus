@@ -10,7 +10,10 @@ namespace strokes::logging {
 /// Appends thread-safe JSON Lines records to a size-bounded local log.
 class StructuredLogger {
  public:
-  explicit StructuredLogger(const std::filesystem::path& path);
+  enum class OpenMode { append, truncate };
+
+  explicit StructuredLogger(const std::filesystem::path& path,
+                            OpenMode mode = OpenMode::append);
   [[nodiscard]] bool ready() const noexcept;
   [[nodiscard]] bool log(std::string_view event, config::json::Object fields = {}) noexcept;
 
