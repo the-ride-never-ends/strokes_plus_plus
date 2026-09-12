@@ -8,9 +8,10 @@
 namespace strokes::tests {
 namespace {
 
-using actions::Action;
+using actions::ActionDefinition;
 using actions::ActionResolver;
 using actions::ActionSource;
+using actions::keyboard_shortcut;
 using context::ApplicationContext;
 using context::ApplicationProfile;
 using context::ApplicationProperty;
@@ -83,8 +84,8 @@ void combined_and_disabled_tests() {
 }
 
 void resolution_tests() {
-  const Action profile_action{actions::ActionType::keyboard_shortcut, "CTRL+SHIFT+TAB"};
-  const Action global_action{actions::ActionType::keyboard_shortcut, "ALT+LEFT"};
+  const auto profile_action = ActionDefinition::keyboard("CTRL+SHIFT+TAB");
+  const auto global_action = ActionDefinition::keyboard("ALT+LEFT");
   ApplicationProfile profile =
       profile_with({ApplicationProperty::process_name, MatchMode::exact, "chrome.exe"});
   profile.actions_by_gesture.emplace("left", profile_action);
@@ -112,7 +113,7 @@ void resolution_tests() {
 
   auto second_profile = profile;
   second_profile.id = "chrome-second";
-  second_profile.actions_by_gesture["left"].value = "CTRL+2";
+  *keyboard_shortcut(second_profile.actions_by_gesture["left"]) = "CTRL+2";
   const std::vector precedence_profiles{profile, second_profile};
   resolved = ActionResolver::resolve("left", chrome, precedence_profiles, globals);
   check(resolved && resolved->profile_id == "chrome" && resolved->action == profile_action,

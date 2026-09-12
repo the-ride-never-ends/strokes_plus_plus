@@ -1,0 +1,23 @@
+#pragma once
+
+#include <cstdint>
+#include <optional>
+
+#include "context/application_context.h"
+#include "gestures/point.h"
+#include "input/gesture_session.h"
+
+namespace strokes::actions {
+
+/// Immutable runtime values captured for, or resolved immediately before, an action.
+struct ActionContext {
+  input::GestureSession gesture;
+  context::ApplicationContext application;
+  std::optional<gestures::Point> current_cursor_position;
+  std::optional<std::uintptr_t> gesture_window;
+  std::optional<std::uintptr_t> foreground_window;
+  std::optional<std::uintptr_t> window_at_gesture_start;
+  std::optional<std::uint32_t> target_process_id;
+};
+
+}  // namespace strokes::actions

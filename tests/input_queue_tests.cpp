@@ -1,4 +1,6 @@
 #include <atomic>
+#include <chrono>
+#include <future>
 #include <thread>
 
 #include "input/input_queue.h"
@@ -73,6 +75,25 @@ void run_input_queue_tests() {
   drained.clear();
   check(drained.size_approx() == 0 && !drained.take(),
         "event pump clears stale items and their wake tokens");
+
+  input::EventPump<int, 8> slow_action_pump;
+  std::promise<void> action_started;
+  std::promise<void> release_action;
+  auto release = release_action.get_future().share();
+  std::jthread slow_consumer([&] {
+    if (slow_action_pump.wait_pop() == 1) action_started.set_value();
+    release.wait();
+  });
+  check(slow_action_pump.push(1), "hook-path event reaches the engine queue");
+  action_started.get_future().wait();
+  auto hook_return = std::async(std::launch::async, [&] { return slow_action_pump.push(2); });
+  check(hook_return.wait_for(std::chrono::milliseconds(100)) == std::future_status::ready &&
+            hook_return.get(),
+        "hook-path enqueue returns while the engine consumer is blocked by an action");
+  release_action.set_value();
+  slow_consumer.join();
+  check(slow_action_pump.take() == 2,
+        "input accepted during a slow action remains queued for later processing");
 }
 
 }  // namespace strokes::tests

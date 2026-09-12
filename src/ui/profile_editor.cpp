@@ -7,6 +7,7 @@
 #include "context/profile_repository.h"
 #include "ui/settings_controls.h"
 #include "ui/settings_ids.h"
+#include "ui/windows_action_editor.h"
 
 namespace strokes::ui {
 namespace {
@@ -47,11 +48,11 @@ void ProfileEditor::create() {
   control(window_, L"BUTTON", L"Add", BS_PUSHBUTTON, profile_add_id, 400, 542, 60, 26);
   control(window_, L"BUTTON", L"Rename", BS_PUSHBUTTON, profile_update_id, 464, 542, 70, 26);
   control(window_, L"BUTTON", L"Delete", BS_PUSHBUTTON, profile_delete_id, 538, 542, 70, 26);
-  text(window_, 0, L"Override shortcut", 400, 580, 100);
+  text(window_, 0, L"Override action", 400, 580, 100);
   control(window_, L"EDIT", L"", ES_AUTOHSCROLL, profile_shortcut_id, 500, 576, 140, 24);
   control(window_, L"BUTTON", L"Enable / Disable", BS_PUSHBUTTON, profile_toggle_id, 400, 606, 96,
           26);
-  control(window_, L"BUTTON", L"Assign override", BS_PUSHBUTTON, profile_assign_id, 500, 606, 140,
+  control(window_, L"BUTTON", L"Configure override", BS_PUSHBUTTON, profile_assign_id, 500, 606, 140,
           26);
   text(window_, 0, L"Selected profile criteria", 20, 424, 220);
   control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, profile_criteria_id, 20, 450, 340,
@@ -164,9 +165,12 @@ void ProfileEditor::load(const std::string& gesture_id) {
     ::SetDlgItemTextW(window_, profile_value_id, L"");
   if (gesture_id.empty()) return;
   auto action = profile.actions_by_gesture.find(gesture_id);
-  ::SetDlgItemTextW(window_, profile_shortcut_id,
-                    action == profile.actions_by_gesture.end() ? L""
-                                                               : wide(action->second.value).c_str());
+  std::string summary;
+  if (action != profile.actions_by_gesture.end())
+    summary = actions::action_type_name(action->second.type) + "." +
+              actions::action_operation_name(action->second);
+  ::SetDlgItemTextW(window_, profile_shortcut_id, wide(summary).c_str());
+  ::SendDlgItemMessageW(window_, profile_shortcut_id, EM_SETREADONLY, TRUE, 0);
 }
 
 void ProfileEditor::load_criterion() {
@@ -308,20 +312,19 @@ void ProfileEditor::remove_criterion() {
 void ProfileEditor::assign(const std::string& gesture_id) {
   const int selected = profile_index();
   if (selected < 0 || gesture_id.empty()) return;
-  const std::string shortcut = read_utf8(window_, profile_shortcut_id);
   context::ProfileRepository repository(configuration_->profiles.profiles);
-  const auto& profile_id = configuration_->profiles.profiles[static_cast<std::size_t>(selected)].id;
-  if (shortcut.empty()) {
-    (void)repository.remove_action(profile_id, gesture_id);
-    return;
-  }
-  if (!actions::parse_shortcut_sequence(shortcut)) {
-    ::MessageBoxW(window_, L"The override shortcut is invalid.", L"Strokes++",
-                  MB_OK | MB_ICONERROR);
-    return;
-  }
-  (void)repository.set_action(profile_id, gesture_id,
-                              {actions::ActionType::keyboard_shortcut, shortcut});
+  auto& profile = configuration_->profiles.profiles[static_cast<std::size_t>(selected)];
+  const auto existing = profile.actions_by_gesture.find(gesture_id);
+  WindowsActionEditor editor;
+  auto result = editor.edit(instance_, window_,
+                            existing == profile.actions_by_gesture.end() ? nullptr
+                                                                         : &existing->second);
+  if (!result.accepted) return;
+  if (result.action)
+    (void)repository.set_action(profile.id, gesture_id, std::move(*result.action));
+  else
+    (void)repository.remove_action(profile.id, gesture_id);
+  load(gesture_id);
 }
 
 }  // namespace strokes::ui

@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "actions/action.h"
+#include "actions/action_definition.h"
 
 namespace strokes::context {
 
@@ -47,7 +47,7 @@ struct ApplicationProfile {
   std::string name;
   bool enabled{true};
   std::vector<MatchCriterion> criteria;
-  std::unordered_map<std::string, actions::Action> actions_by_gesture;
+  std::unordered_map<std::string, actions::ActionDefinition> actions_by_gesture;
 };
 
 }  // namespace strokes::context

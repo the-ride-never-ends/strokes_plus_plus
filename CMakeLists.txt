@@ -1,13 +1,18 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(strokes_plus_plus VERSION 0.6.0 LANGUAGES CXX)
+project(strokes_plus_plus VERSION 0.8.0 LANGUAGES CXX)
 
 option(STROKES_BUILD_TESTS "Build the unit tests" ON)
 
 add_library(strokes_core
+    src/actions/action_definition.cpp
+    src/actions/action_executor.cpp
+    src/actions/action_factory.cpp
     src/actions/action_resolver.cpp
     src/actions/keyboard_action.cpp
+    src/actions/keyboard_service.cpp
     src/actions/keyboard_shortcut.cpp
+    src/actions/symbolic_resolver.cpp
     src/context/profile_matcher.cpp
     src/config/json.cpp
     src/config/configuration_codec.cpp
@@ -34,6 +39,13 @@ endif()
 if(WIN32)
     add_library(strokes_windows
         src/actions/windows_keyboard_input.cpp
+        src/actions/windows_audio_service.cpp
+        src/actions/windows_media_service.cpp
+        src/actions/windows_mouse_service.cpp
+        src/actions/windows_process_service.cpp
+        src/actions/windows_shell_service.cpp
+        src/actions/windows_virtual_desktop_service.cpp
+        src/actions/windows_window_service.cpp
         src/context/windows_application_context.cpp
         src/config/windows_app_data.cpp
         src/input/windows_mouse_click.cpp
@@ -43,13 +55,14 @@ if(WIN32)
         src/overlay/windows_gesture_overlay.cpp
         src/tray/windows_tray_icon.cpp
         src/ui/windows_settings_window.cpp
+        src/ui/windows_action_editor.cpp
         src/ui/windows_gesture_trainer.cpp
         src/ui/settings_controls.cpp
         src/ui/gesture_editor.cpp
         src/ui/profile_editor.cpp
     )
     target_include_directories(strokes_windows PUBLIC src)
-    target_link_libraries(strokes_windows PUBLIC strokes_core user32 shell32 ole32)
+    target_link_libraries(strokes_windows PUBLIC strokes_core user32 shell32 ole32 uuid comdlg32)
     target_compile_features(strokes_windows PUBLIC cxx_std_20)
     if(MSVC)
         target_compile_options(strokes_windows PRIVATE /W4 /permissive- /EHsc)
@@ -69,6 +82,7 @@ endif()
 if(STROKES_BUILD_TESTS)
     enable_testing()
     add_executable(strokes_core_tests
+        tests/action_definition_tests.cpp
         tests/gesture_tests.cpp
         tests/repository_tests.cpp
         tests/gesture_engine_tests.cpp

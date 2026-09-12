@@ -1,12 +1,6 @@
 #include "engine/gesture_engine.h"
 
-#include <chrono>
-#include <iterator>
-#include <thread>
-
 #include <utility>
-
-#include "actions/keyboard_shortcut.h"
 
 namespace strokes::engine {
 
@@ -17,16 +11,30 @@ GestureEngine::GestureEngine(gestures::Recognizer& recognizer,
                              const input::IModifierStateProvider& modifier_state,
                              input::IMouseClick& mouse_click,
                              actions::IKeyboardInput& keyboard_input,
-                             input::GestureStateMachine state_machine, IGestureFeedback* feedback)
+                             input::GestureStateMachine state_machine, IGestureFeedback* feedback,
+                             actions::ActionServices services)
     : recognizer_(recognizer),
       profiles_(profiles),
       global_actions_(global_actions),
       application_context_(application_context),
       modifier_state_(modifier_state),
       mouse_click_(mouse_click),
-      keyboard_input_(keyboard_input),
+      keyboard_service_(keyboard_input),
+      services_(services),
       state_machine_(std::move(state_machine)),
-      feedback_(feedback) {}
+      feedback_(feedback) {
+  services_.keyboard = &keyboard_service_;
+  action_executor_ = std::make_unique<actions::ActionExecutor>(services_);
+}
+
+GestureEngine::~GestureEngine() {
+  if (feedback_) feedback_->hide();
+  if (state_machine_.state() == input::GestureState::button_pending ||
+      state_machine_.state() == input::GestureState::capturing) {
+    (void)state_machine_.cancel();
+    (void)state_machine_.cancellation_finished();
+  }
+}
 
 EngineUpdate GestureEngine::process(const input::MouseInputEvent& event) {
   EngineUpdate result;
@@ -95,30 +103,34 @@ EngineUpdate GestureEngine::process(const input::MouseInputEvent& event) {
 
   result.action_source = resolved->source;
   result.profile_id = resolved->profile_id;
+  result.action_type = actions::action_type_name(resolved->action.type);
+  result.action_operation = actions::action_operation_name(resolved->action);
+  result.action_target = actions::action_target_name(resolved->action);
   result.action_attempted = true;
   (void)state_machine_.recognition_finished(true);
-  result.action_succeeded = execute(resolved->action);
+  result.action_result = execute(resolved->action);
+  result.action_succeeded = result.action_result->success;
   (void)state_machine_.execution_finished();
   return result;
 }
 
-bool GestureEngine::execute(const actions::Action& action) {
-  switch (action.type) {
-    case actions::ActionType::keyboard_shortcut:
-      if (const auto sequence = actions::parse_shortcut_sequence(action.value)) {
-        for (auto shortcut = sequence->begin(); shortcut != sequence->end(); ++shortcut) {
-          if (!actions::KeyboardActionExecutor::execute(*shortcut, keyboard_input_)) return false;
-          // SendInput returns before the target application necessarily handles
-          // the chord. Give UI commands such as ALT+SPACE time to open their
-          // menu before injecting the next sequence step.
-          if (std::next(shortcut) != sequence->end())
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-        return true;
-      }
-      return false;
+actions::ActionResult GestureEngine::execute(const actions::ActionDefinition& definition) {
+  const auto& session = *state_machine_.session();
+  actions::ActionContext context;
+  context.gesture = session;
+  context.application = session.application;
+  context.current_cursor_position =
+      services_.mouse ? services_.mouse->current_position() : std::nullopt;
+  if (session.application.window_handle != 0) {
+    context.gesture_window = session.application.window_handle;
+    context.window_at_gesture_start = session.application.window_handle;
   }
-  return false;
+  if (const auto foreground = application_context_.foreground_application();
+      foreground && foreground->window_handle != 0)
+    context.foreground_window = foreground->window_handle;
+  if (session.application.process_id != 0) context.target_process_id = session.application.process_id;
+
+  return action_executor_->submit(definition, std::move(context)).get();
 }
 
 }  // namespace strokes::engine

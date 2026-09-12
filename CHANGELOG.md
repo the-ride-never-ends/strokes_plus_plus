@@ -2,7 +2,38 @@
 
 All notable changes to Strokes++ will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The project does not yet have a versioned release.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [Unreleased]
+
+## [0.8.0] - 2026-09-12
+
+### Added
+
+- Added a versioned generalized action model for keyboard, process, URL/URI, mouse, window, media,
+  volume, and virtual-desktop actions.
+- Added a validating action factory, sequential executor, structured results, contextual position
+  and window resolution, and reusable platform-service interfaces suitable for future Lua bindings.
+- Added Windows implementations for executable launches, shell URI handling, generalized mouse
+  injection, window manipulation and geometry, media commands, Core Audio volume control, and
+  virtual-desktop commands.
+- Added generic-action persistence with record-level recovery and mapping-specific diagnostics.
+- Added a generalized Settings action editor with type-specific fields, executable and directory
+  browsers, validation, editing, and mapping removal for global and profile actions.
+
+### Changed
+
+- Migrated global and application-profile mappings from the keyboard-only representation to generic
+  action definitions while retaining Phase 1 keyboard configuration compatibility.
+- Expanded action logging with type, operation, target, result, error category, code, and message.
+
+### Tests
+
+- Added action-definition, validation, factory, queue ordering, exception recovery, symbolic target,
+  persistence, Windows input construction, cleanup, geometry, and per-category engine recovery
+  coverage.
+- Added recognized-gesture acceptance coverage for every action category, Phase 1 compatibility
+  execution, nonblocking hook-path delivery, volume limits, and shutdown cleanup.
 
 ## [0.7.0]
 

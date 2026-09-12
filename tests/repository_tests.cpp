@@ -45,12 +45,13 @@ void profile_repository_tests() {
             {context::ApplicationProperty::window_title, context::MatchMode::contains, "Docs"}),
         "profile criterion can be edited by index");
   check(repo.set_enabled("chrome", true), "profile with criterion can be enabled");
-  check(repo.set_action("chrome", "left", {actions::ActionType::keyboard_shortcut, "ALT+LEFT"}),
+  check(repo.set_action("chrome", "left", actions::ActionDefinition::keyboard("ALT+LEFT")),
         "profile action is assigned");
   check(!repo.set_action("chrome", "right",
-                         {actions::ActionType::keyboard_shortcut, "CTRL+NOT_A_KEY"}),
+                         actions::ActionDefinition::keyboard("CTRL+NOT_A_KEY")),
         "invalid profile shortcut is rejected immediately");
-  check(values[0].actions_by_gesture.at("left").value == "ALT+LEFT", "assigned action is retained");
+  check(*actions::keyboard_shortcut(values[0].actions_by_gesture.at("left")) == "ALT+LEFT",
+        "assigned action is retained");
   check(repo.rename("chrome", "Google Chrome") && values[0].id == "chrome",
         "profile rename preserves identity");
   check(repo.remove_criterion("chrome", 1) && values[0].criteria.size() == 1,

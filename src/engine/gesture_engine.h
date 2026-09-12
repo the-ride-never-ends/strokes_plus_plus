@@ -1,10 +1,14 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include "actions/action_resolver.h"
+#include "actions/action_result.h"
+#include "actions/action_executor.h"
 #include "actions/keyboard_action.h"
+#include "actions/keyboard_service.h"
 #include "context/application_context_provider.h"
 #include "engine/gesture_feedback.h"
 #include "gestures/recognizer.h"
@@ -23,6 +27,10 @@ struct EngineUpdate {
   bool click_replayed{};
   bool action_attempted{};
   bool action_succeeded{};
+  std::optional<actions::ActionResult> action_result;
+  std::string action_type;
+  std::string action_operation;
+  std::string action_target;
 };
 
 /// Coordinates gesture state, recognition, action resolution, feedback, and execution.
@@ -35,7 +43,9 @@ class GestureEngine {
                 const input::IModifierStateProvider& modifier_state,
                 input::IMouseClick& mouse_click, actions::IKeyboardInput& keyboard_input,
                 input::GestureStateMachine state_machine = {},
-                IGestureFeedback* feedback = nullptr);
+                IGestureFeedback* feedback = nullptr,
+                actions::ActionServices services = {});
+  ~GestureEngine();
 
   [[nodiscard]] EngineUpdate process(const input::MouseInputEvent& event);
   [[nodiscard]] input::GestureState state() const noexcept { return state_machine_.state(); }
@@ -44,7 +54,7 @@ class GestureEngine {
   }
 
  private:
-  [[nodiscard]] bool execute(const actions::Action& action);
+  [[nodiscard]] actions::ActionResult execute(const actions::ActionDefinition& action);
 
   gestures::Recognizer& recognizer_;
   const std::vector<context::ApplicationProfile>& profiles_;
@@ -52,7 +62,9 @@ class GestureEngine {
   const context::IApplicationContextProvider& application_context_;
   const input::IModifierStateProvider& modifier_state_;
   input::IMouseClick& mouse_click_;
-  actions::IKeyboardInput& keyboard_input_;
+  actions::KeyboardService keyboard_service_;
+  actions::ActionServices services_;
+  std::unique_ptr<actions::ActionExecutor> action_executor_;
   input::GestureStateMachine state_machine_;
   IGestureFeedback* feedback_{};
 };

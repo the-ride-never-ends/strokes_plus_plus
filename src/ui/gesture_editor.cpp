@@ -8,6 +8,7 @@
 #include "ui/settings_controls.h"
 #include "ui/settings_ids.h"
 #include "ui/windows_gesture_trainer.h"
+#include "ui/windows_action_editor.h"
 
 namespace strokes::ui {
 
@@ -17,9 +18,9 @@ using detail::text;
 using detail::wide;
 
 void GestureEditor::create() {
-  text(window_, 0, L"Selected gesture global shortcut", 20, 380);
+  text(window_, 0, L"Selected gesture global action", 20, 380);
   control(window_, L"EDIT", L"", ES_AUTOHSCROLL, shortcut_id, 230, 376, 110, 24);
-  control(window_, L"BUTTON", L"Assign", BS_PUSHBUTTON, global_assign_id, 344, 376, 60, 24);
+  control(window_, L"BUTTON", L"Configure", BS_PUSHBUTTON, global_assign_id, 344, 376, 60, 24);
   text(window_, 0, L"Gestures", 410, 12);
   control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, gestures_id, 400, 38, 220, 150);
   control(window_, L"EDIT", L"", ES_AUTOHSCROLL, gesture_name_id, 400, 194, 220, 24);
@@ -97,10 +98,13 @@ void GestureEditor::load() {
   const auto& gesture = configuration_->gestures.gestures[static_cast<std::size_t>(chosen)];
   ::SetDlgItemTextW(window_, gesture_name_id, wide(gesture.name).c_str());
   auto action = configuration_->profiles.global_actions.find(gesture.id);
-  ::SetDlgItemTextW(window_, shortcut_id,
-                    action == configuration_->profiles.global_actions.end()
-                        ? L""
-                        : wide(action->second.value).c_str());
+  std::string summary;
+  if (action != configuration_->profiles.global_actions.end()) {
+    summary = actions::action_type_name(action->second.type) + "." +
+              actions::action_operation_name(action->second);
+  }
+  ::SetDlgItemTextW(window_, shortcut_id, wide(summary).c_str());
+  ::SendDlgItemMessageW(window_, shortcut_id, EM_SETREADONLY, TRUE, 0);
   ::EnableWindow(::GetDlgItem(window_, shortcut_id), TRUE);
   ::EnableWindow(::GetDlgItem(window_, global_assign_id), TRUE);
 }
@@ -201,41 +205,24 @@ void GestureEditor::toggle() {
 void GestureEditor::assign() {
   const int chosen = index();
   if (chosen < 0) return;
-  const std::string shortcut = read_utf8(window_, shortcut_id);
   const auto& gesture_id = configuration_->gestures.gestures[static_cast<std::size_t>(chosen)].id;
-  if (shortcut.empty()) {
+  auto existing = configuration_->profiles.global_actions.find(gesture_id);
+  WindowsActionEditor editor;
+  auto result = editor.edit(instance_, window_,
+                            existing == configuration_->profiles.global_actions.end()
+                                ? nullptr
+                                : &existing->second);
+  if (!result.accepted) return;
+  if (result.action)
+    configuration_->profiles.global_actions.insert_or_assign(gesture_id,
+                                                              std::move(*result.action));
+  else
     configuration_->profiles.global_actions.erase(gesture_id);
-    return;
-  }
-  if (!actions::parse_shortcut_sequence(shortcut)) {
-    ::MessageBoxW(window_, L"The shortcut is invalid.", L"Strokes++", MB_OK | MB_ICONERROR);
-    return;
-  }
-  configuration_->profiles.global_actions.insert_or_assign(
-      gesture_id, actions::Action{actions::ActionType::keyboard_shortcut, shortcut});
+  load();
 }
 
 bool GestureEditor::save(config::ConfigurationBundle& target) const {
-  std::string shortcut = read_utf8(window_, shortcut_id);
-  for (const unsigned char value : shortcut) {
-    if (value > 127) {
-      ::MessageBoxW(window_, L"Shortcut must use ASCII key names.", L"Strokes++",
-                    MB_OK | MB_ICONERROR);
-      return false;
-    }
-  }
-  if (!shortcut.empty() && !actions::parse_shortcut_sequence(shortcut)) {
-    ::MessageBoxW(window_, L"The global shortcut is invalid.", L"Strokes++", MB_OK | MB_ICONERROR);
-    return false;
-  }
-  const int chosen = index();
-  if (chosen < 0) return true;
-  const std::string id = target.gestures.gestures[static_cast<std::size_t>(chosen)].id;
-  if (shortcut.empty())
-    target.profiles.global_actions.erase(id);
-  else
-    target.profiles.global_actions.insert_or_assign(
-        id, actions::Action{actions::ActionType::keyboard_shortcut, std::move(shortcut)});
+  (void)target;
   return true;
 }
 

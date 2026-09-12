@@ -14,8 +14,8 @@ namespace strokes::ui {
 /// Edits application profiles, their match criteria, and gesture overrides.
 class ProfileEditor {
  public:
-  ProfileEditor(HWND window, config::ConfigurationBundle& configuration)
-      : window_(window), configuration_(&configuration) {}
+  ProfileEditor(HWND window, HINSTANCE instance, config::ConfigurationBundle& configuration)
+      : window_(window), instance_(instance), configuration_(&configuration) {}
 
   void create();
   void refresh();
@@ -42,6 +42,7 @@ class ProfileEditor {
   [[nodiscard]] int criterion_index() const noexcept;
 
   HWND window_;
+  HINSTANCE instance_;
   config::ConfigurationBundle* configuration_;
 };
 

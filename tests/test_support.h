@@ -27,5 +27,6 @@ void run_configuration_tests();
 void run_configuration_store_tests();
 void run_logging_tests();
 void run_repository_tests();
+void run_action_definition_tests();
 
 }  // namespace strokes::tests

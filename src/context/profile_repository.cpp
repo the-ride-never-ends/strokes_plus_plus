@@ -3,16 +3,13 @@
 #include <algorithm>
 #include <utility>
 
-#include "actions/keyboard_shortcut.h"
+#include "actions/action_definition.h"
 #include "repository_helpers.h"
 
 namespace strokes::context {
 namespace {
 
-bool valid_action(const actions::Action& action) {
-  return action.type == actions::ActionType::keyboard_shortcut &&
-         actions::parse_shortcut_sequence(action.value).has_value();
-}
+bool valid_action(const actions::ActionDefinition& action) { return actions::validate(action).valid; }
 
 }  // namespace
 
@@ -72,7 +69,7 @@ bool ProfileRepository::remove_criterion(const std::string& id, std::size_t inde
 }
 
 bool ProfileRepository::set_action(const std::string& id, std::string gesture_id,
-                                   actions::Action action) {
+                                   actions::ActionDefinition action) {
   auto* profile = find(id);
   if (profile == nullptr || gesture_id.empty() || !valid_action(action)) return false;
   profile->actions_by_gesture.insert_or_assign(std::move(gesture_id), std::move(action));

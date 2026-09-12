@@ -143,6 +143,7 @@ void closed_shape_tests() {
 }  // namespace
 
 int main() {
+  strokes::tests::run_action_definition_tests();
   normalization_tests();
   recognition_tests();
   orientation_and_library_tests();

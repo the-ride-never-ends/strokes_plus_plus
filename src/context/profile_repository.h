@@ -19,7 +19,7 @@ class ProfileRepository {
                                        MatchCriterion criterion);
   [[nodiscard]] bool remove_criterion(const std::string& id, std::size_t index);
   [[nodiscard]] bool set_action(const std::string& id, std::string gesture_id,
-                                actions::Action action);
+                                actions::ActionDefinition action);
   [[nodiscard]] bool remove_action(const std::string& id, const std::string& gesture_id);
   [[nodiscard]] ApplicationProfile* find(const std::string& id) noexcept;
 

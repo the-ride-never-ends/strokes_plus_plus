@@ -99,20 +99,366 @@ std::optional<context::MatchMode> decode_mode(std::string_view value) {
   return std::nullopt;
 }
 
-Value encode_action(const actions::Action& action) {
-  return Object{{"type", "keyboard"}, {"shortcut", action.value}};
+std::string encode(actions::MouseOperation value) {
+  switch (value) {
+    case actions::MouseOperation::click: return "click";
+    case actions::MouseOperation::double_click: return "double_click";
+    case actions::MouseOperation::button_down: return "down";
+    case actions::MouseOperation::button_up: return "up";
+    case actions::MouseOperation::move: return "move";
+  }
+  return {};
 }
 
-std::optional<actions::Action> decode_action(const Value& value) {
-  const auto* object = value.get_if<Object>();
-  if (object == nullptr) return std::nullopt;
-  const auto* type = field_as<std::string>(*object, "type");
-  const auto* shortcut = field_as<std::string>(*object, "shortcut");
-  if (type == nullptr || *type != "keyboard" || shortcut == nullptr ||
-      !actions::parse_shortcut_sequence(*shortcut)) {
-    return std::nullopt;
+std::optional<actions::MouseOperation> decode_mouse_operation(std::string_view value) {
+  if (value == "click") return actions::MouseOperation::click;
+  if (value == "double_click") return actions::MouseOperation::double_click;
+  if (value == "down") return actions::MouseOperation::button_down;
+  if (value == "up") return actions::MouseOperation::button_up;
+  if (value == "move") return actions::MouseOperation::move;
+  return std::nullopt;
+}
+
+std::string encode(actions::MouseButton value) {
+  switch (value) {
+    case actions::MouseButton::left: return "left";
+    case actions::MouseButton::right: return "right";
+    case actions::MouseButton::middle: return "middle";
+    case actions::MouseButton::x_button_1: return "xbutton1";
+    case actions::MouseButton::x_button_2: return "xbutton2";
   }
-  return actions::Action{actions::ActionType::keyboard_shortcut, *shortcut};
+  return {};
+}
+
+std::optional<actions::MouseButton> decode_mouse_button(std::string_view value) {
+  if (value == "left") return actions::MouseButton::left;
+  if (value == "right") return actions::MouseButton::right;
+  if (value == "middle") return actions::MouseButton::middle;
+  if (value == "xbutton1") return actions::MouseButton::x_button_1;
+  if (value == "xbutton2") return actions::MouseButton::x_button_2;
+  return std::nullopt;
+}
+
+std::string encode(actions::PositionTarget value) {
+  switch (value) {
+    case actions::PositionTarget::current_cursor: return "current_cursor";
+    case actions::PositionTarget::gesture_start: return "gesture_start";
+    case actions::PositionTarget::gesture_end: return "gesture_end";
+    case actions::PositionTarget::absolute: return "absolute";
+  }
+  return {};
+}
+
+std::optional<actions::PositionTarget> decode_position_target(std::string_view value) {
+  if (value == "current_cursor") return actions::PositionTarget::current_cursor;
+  if (value == "gesture_start") return actions::PositionTarget::gesture_start;
+  if (value == "gesture_end") return actions::PositionTarget::gesture_end;
+  if (value == "absolute") return actions::PositionTarget::absolute;
+  return std::nullopt;
+}
+
+std::string encode(actions::WindowOperation value) {
+  switch (value) {
+    case actions::WindowOperation::close: return "close";
+    case actions::WindowOperation::minimize: return "minimize";
+    case actions::WindowOperation::maximize: return "maximize";
+    case actions::WindowOperation::restore: return "restore";
+    case actions::WindowOperation::activate: return "activate";
+    case actions::WindowOperation::move: return "move";
+    case actions::WindowOperation::resize: return "resize";
+    case actions::WindowOperation::move_resize: return "move_resize";
+  }
+  return {};
+}
+
+std::optional<actions::WindowOperation> decode_window_operation(std::string_view value) {
+  if (value == "close") return actions::WindowOperation::close;
+  if (value == "minimize") return actions::WindowOperation::minimize;
+  if (value == "maximize") return actions::WindowOperation::maximize;
+  if (value == "restore") return actions::WindowOperation::restore;
+  if (value == "activate") return actions::WindowOperation::activate;
+  if (value == "move") return actions::WindowOperation::move;
+  if (value == "resize") return actions::WindowOperation::resize;
+  if (value == "move_resize") return actions::WindowOperation::move_resize;
+  return std::nullopt;
+}
+
+std::string encode(actions::WindowTarget value) {
+  switch (value) {
+    case actions::WindowTarget::gesture_window: return "gesture_window";
+    case actions::WindowTarget::foreground_window: return "foreground_window";
+    case actions::WindowTarget::window_at_gesture_start: return "window_at_gesture_start";
+  }
+  return {};
+}
+
+std::optional<actions::WindowTarget> decode_window_target(std::string_view value) {
+  if (value == "gesture_window") return actions::WindowTarget::gesture_window;
+  if (value == "foreground_window") return actions::WindowTarget::foreground_window;
+  if (value == "window_at_gesture_start") return actions::WindowTarget::window_at_gesture_start;
+  return std::nullopt;
+}
+
+std::string encode(actions::MediaOperation value) {
+  switch (value) {
+    case actions::MediaOperation::play_pause: return "play_pause";
+    case actions::MediaOperation::next_track: return "next_track";
+    case actions::MediaOperation::previous_track: return "previous_track";
+    case actions::MediaOperation::stop: return "stop";
+  }
+  return {};
+}
+
+std::optional<actions::MediaOperation> decode_media_operation(std::string_view value) {
+  if (value == "play_pause") return actions::MediaOperation::play_pause;
+  if (value == "next_track") return actions::MediaOperation::next_track;
+  if (value == "previous_track") return actions::MediaOperation::previous_track;
+  if (value == "stop") return actions::MediaOperation::stop;
+  return std::nullopt;
+}
+
+std::string encode(actions::VolumeOperation value) {
+  switch (value) {
+    case actions::VolumeOperation::increase: return "increase";
+    case actions::VolumeOperation::decrease: return "decrease";
+    case actions::VolumeOperation::mute_toggle: return "mute_toggle";
+  }
+  return {};
+}
+
+std::optional<actions::VolumeOperation> decode_volume_operation(std::string_view value) {
+  if (value == "increase") return actions::VolumeOperation::increase;
+  if (value == "decrease") return actions::VolumeOperation::decrease;
+  if (value == "mute_toggle") return actions::VolumeOperation::mute_toggle;
+  return std::nullopt;
+}
+
+std::string encode(actions::VirtualDesktopOperation value) {
+  switch (value) {
+    case actions::VirtualDesktopOperation::next: return "next";
+    case actions::VirtualDesktopOperation::previous: return "previous";
+    case actions::VirtualDesktopOperation::create: return "create";
+    case actions::VirtualDesktopOperation::close: return "close";
+  }
+  return {};
+}
+
+std::optional<actions::VirtualDesktopOperation> decode_desktop_operation(std::string_view value) {
+  if (value == "next") return actions::VirtualDesktopOperation::next;
+  if (value == "previous") return actions::VirtualDesktopOperation::previous;
+  if (value == "create") return actions::VirtualDesktopOperation::create;
+  if (value == "close") return actions::VirtualDesktopOperation::close;
+  return std::nullopt;
+}
+
+Value encode_position(const actions::PositionDefinition& position) {
+  Object result{{"type", encode(position.target)}};
+  if (position.absolute) {
+    result.emplace("x", position.absolute->x);
+    result.emplace("y", position.absolute->y);
+  }
+  return result;
+}
+
+std::optional<actions::PositionDefinition> decode_position(const Value& value) {
+  const auto* object = value.get_if<Object>();
+  if (!object) return std::nullopt;
+  const auto* type = field_as<std::string>(*object, "type");
+  if (!type) return std::nullopt;
+  const auto target = decode_position_target(*type);
+  if (!target) return std::nullopt;
+  actions::PositionDefinition result{*target, std::nullopt};
+  if (*target == actions::PositionTarget::absolute) {
+    const auto* x = field_as<double>(*object, "x");
+    const auto* y = field_as<double>(*object, "y");
+    if (!x || !y || !std::isfinite(*x) || !std::isfinite(*y)) return std::nullopt;
+    result.absolute = gestures::Point{*x, *y};
+  }
+  return result;
+}
+
+void add_optional_integer(Object& object, std::string name, const std::optional<int>& value) {
+  if (value) object.emplace(std::move(name), double(*value));
+}
+
+std::optional<int> optional_integer(const Object& object, std::string_view name, bool& valid) {
+  const auto* value = field(object, name);
+  if (!value) return std::nullopt;
+  const auto decoded = integer_value(*value);
+  if (!decoded) valid = false;
+  return decoded;
+}
+
+Value encode_action(const actions::ActionDefinition& action) {
+  Object result{{"version", double(action.version)}};
+  switch (action.type) {
+    case actions::ActionType::keyboard_shortcut: {
+      result.emplace("type", "keyboard");
+      const auto* value = std::get_if<actions::KeyboardParameters>(&action.parameters);
+      if (value) result.emplace("shortcut", value->shortcut);
+      break;
+    }
+    case actions::ActionType::process: {
+      result.emplace("type", "process");
+      const auto* value = std::get_if<actions::ProcessParameters>(&action.parameters);
+      if (value) {
+        result.emplace("operation", "launch");
+        result.emplace("path", value->path);
+        if (!value->arguments.empty()) result.emplace("arguments", value->arguments);
+        if (!value->working_directory.empty())
+          result.emplace("working_directory", value->working_directory);
+      }
+      break;
+    }
+    case actions::ActionType::url: {
+      result.emplace("type", "url");
+      const auto* value = std::get_if<actions::UrlParameters>(&action.parameters);
+      if (value) result.emplace("url", value->uri);
+      break;
+    }
+    case actions::ActionType::mouse: {
+      result.emplace("type", "mouse");
+      const auto* value = std::get_if<actions::MouseParameters>(&action.parameters);
+      if (value) {
+        result.emplace("operation", encode(value->operation));
+        if (value->button) result.emplace("button", encode(*value->button));
+        result.emplace("position", encode_position(value->position));
+      }
+      break;
+    }
+    case actions::ActionType::window: {
+      result.emplace("type", "window");
+      const auto* value = std::get_if<actions::WindowParameters>(&action.parameters);
+      if (value) {
+        result.emplace("operation", encode(value->operation));
+        result.emplace("target", encode(value->target));
+        add_optional_integer(result, "x", value->x);
+        add_optional_integer(result, "y", value->y);
+        add_optional_integer(result, "width", value->width);
+        add_optional_integer(result, "height", value->height);
+      }
+      break;
+    }
+    case actions::ActionType::media: {
+      result.emplace("type", "media");
+      const auto* value = std::get_if<actions::MediaParameters>(&action.parameters);
+      if (value) result.emplace("operation", encode(value->operation));
+      break;
+    }
+    case actions::ActionType::volume: {
+      result.emplace("type", "volume");
+      const auto* value = std::get_if<actions::VolumeParameters>(&action.parameters);
+      if (value) {
+        result.emplace("operation", encode(value->operation));
+        if (value->amount) result.emplace("amount", *value->amount);
+      }
+      break;
+    }
+    case actions::ActionType::virtual_desktop: {
+      result.emplace("type", "virtual_desktop");
+      const auto* value = std::get_if<actions::VirtualDesktopParameters>(&action.parameters);
+      if (value) result.emplace("operation", encode(value->operation));
+      break;
+    }
+  }
+  return result;
+}
+
+std::optional<actions::ActionDefinition> decode_action(const Value& value) {
+  const auto* object = value.get_if<Object>();
+  if (!object) return std::nullopt;
+  const auto* type = field_as<std::string>(*object, "type");
+  if (!type) return std::nullopt;
+  int version = actions::ActionDefinition::current_version;
+  if (const auto* encoded_version = field(*object, "version")) {
+    const auto decoded = integer_value(*encoded_version);
+    if (!decoded) return std::nullopt;
+    version = *decoded;
+  }
+
+  std::optional<actions::ActionDefinition> result;
+  if (*type == "keyboard") {
+    const auto* shortcut = field_as<std::string>(*object, "shortcut");
+    if (shortcut) result = actions::ActionDefinition::keyboard(*shortcut);
+  } else if (*type == "process") {
+    const auto* operation = field_as<std::string>(*object, "operation");
+    const auto* path = field_as<std::string>(*object, "path");
+    if (operation && *operation == "launch" && path) {
+      const auto* arguments = field_as<std::string>(*object, "arguments");
+      const auto* working = field_as<std::string>(*object, "working_directory");
+      result = actions::ActionDefinition{
+          version, actions::ActionType::process,
+          actions::ProcessParameters{actions::ProcessOperation::launch, *path,
+                                     arguments ? *arguments : std::string{},
+                                     working ? *working : std::string{}}};
+    }
+  } else if (*type == "url") {
+    const auto* uri = field_as<std::string>(*object, "url");
+    if (uri) result = actions::ActionDefinition{version, actions::ActionType::url,
+                                                actions::UrlParameters{*uri}};
+  } else if (*type == "mouse") {
+    const auto* operation = field_as<std::string>(*object, "operation");
+    const auto* encoded_position = field(*object, "position");
+    if (operation && encoded_position) {
+      const auto decoded_operation = decode_mouse_operation(*operation);
+      const auto position = decode_position(*encoded_position);
+      std::optional<actions::MouseButton> button;
+      bool button_valid = true;
+      if (const auto* encoded_button = field_as<std::string>(*object, "button")) {
+        button = decode_mouse_button(*encoded_button);
+        button_valid = button.has_value();
+      } else if (field(*object, "button")) {
+        button_valid = false;
+      }
+      if (decoded_operation && position && button_valid)
+        result = actions::ActionDefinition{
+            version, actions::ActionType::mouse,
+            actions::MouseParameters{*decoded_operation, button, *position}};
+    }
+  } else if (*type == "window") {
+    const auto* operation = field_as<std::string>(*object, "operation");
+    const auto* target = field_as<std::string>(*object, "target");
+    if (operation && target) {
+      const auto decoded_operation = decode_window_operation(*operation);
+      const auto decoded_target = decode_window_target(*target);
+      bool integers_valid = true;
+      auto x = optional_integer(*object, "x", integers_valid);
+      auto y = optional_integer(*object, "y", integers_valid);
+      auto width = optional_integer(*object, "width", integers_valid);
+      auto height = optional_integer(*object, "height", integers_valid);
+      if (decoded_operation && decoded_target && integers_valid)
+        result = actions::ActionDefinition{
+            version, actions::ActionType::window,
+            actions::WindowParameters{*decoded_operation, *decoded_target, x, y, width, height}};
+    }
+  } else if (*type == "media") {
+    const auto* operation = field_as<std::string>(*object, "operation");
+    const auto decoded = operation ? decode_media_operation(*operation) : std::nullopt;
+    if (decoded) result = actions::ActionDefinition{version, actions::ActionType::media,
+                                                    actions::MediaParameters{*decoded}};
+  } else if (*type == "volume") {
+    const auto* operation = field_as<std::string>(*object, "operation");
+    const auto decoded = operation ? decode_volume_operation(*operation) : std::nullopt;
+    std::optional<double> amount;
+    bool amount_valid = true;
+    if (const auto* encoded_amount = field_as<double>(*object, "amount"))
+      amount = *encoded_amount;
+    else if (field(*object, "amount"))
+      amount_valid = false;
+    if (decoded && amount_valid)
+      result = actions::ActionDefinition{version, actions::ActionType::volume,
+                                         actions::VolumeParameters{*decoded, amount}};
+  } else if (*type == "virtual_desktop") {
+    const auto* operation = field_as<std::string>(*object, "operation");
+    const auto decoded = operation ? decode_desktop_operation(*operation) : std::nullopt;
+    if (decoded)
+      result = actions::ActionDefinition{version, actions::ActionType::virtual_desktop,
+                                         actions::VirtualDesktopParameters{*decoded}};
+  }
+
+  if (!result) return std::nullopt;
+  result->version = version;
+  return actions::validate(*result).valid ? result : std::nullopt;
 }
 
 Object encode_actions(const actions::ActionResolver::GlobalActions& actions) {
@@ -124,13 +470,15 @@ Object encode_actions(const actions::ActionResolver::GlobalActions& actions) {
 }
 
 bool decode_actions(const Value& value, actions::ActionResolver::GlobalActions& actions,
-                    std::size_t& skipped) {
+                    std::size_t& skipped, std::string_view scope,
+                    std::vector<std::string>& invalid_actions) {
   const auto* object = value.get_if<Object>();
   if (object == nullptr) return false;
   for (const auto& [gesture_id, encoded] : *object) {
     auto action = decode_action(encoded);
     if (gesture_id.empty() || !action) {
       ++skipped;
+      invalid_actions.push_back(std::string(scope) + (gesture_id.empty() ? "<empty>" : gesture_id));
       continue;
     }
     actions.emplace(gesture_id, std::move(*action));
@@ -394,8 +742,10 @@ DecodeResult<ProfileFile> decode_profiles(const Value& value) {
   if (profiles == nullptr) return {{}, "profiles must be an array"};
 
   std::size_t skipped = 0;
+  std::vector<std::string> invalid_actions;
   if (const auto* global_actions = field(*object, "global_actions")) {
-    if (!decode_actions(*global_actions, result.global_actions, skipped)) {
+    if (!decode_actions(*global_actions, result.global_actions, skipped, "global:",
+                        invalid_actions)) {
       return {{}, "global_actions must be an object"};
     }
   }
@@ -451,7 +801,8 @@ DecodeResult<ProfileFile> decode_profiles(const Value& value) {
       ++skipped;
     }
     if (const auto* encoded_actions = field(*profile, "actions")) {
-      if (!decode_actions(*encoded_actions, decoded.actions_by_gesture, skipped)) {
+      if (!decode_actions(*encoded_actions, decoded.actions_by_gesture, skipped,
+                          "profile:" + *id + ":", invalid_actions)) {
         ++skipped;
       }
     }
@@ -459,10 +810,19 @@ DecodeResult<ProfileFile> decode_profiles(const Value& value) {
     profile_ids.insert(*id);
     result.profiles.push_back(std::move(decoded));
   }
-  return {std::move(result), {},
-          skipped == 0 ? std::string{}
-                       : "recovered with " + std::to_string(skipped) +
-                             " invalid or disabled profile/criterion/action entries"};
+  std::string warning;
+  if (skipped != 0) {
+    warning = "recovered with " + std::to_string(skipped) +
+              " invalid or disabled profile/criterion/action entries";
+    if (!invalid_actions.empty()) {
+      warning += "; invalid action mappings: ";
+      for (std::size_t index = 0; index < invalid_actions.size(); ++index) {
+        if (index != 0) warning += ", ";
+        warning += invalid_actions[index];
+      }
+    }
+  }
+  return {std::move(result), {}, std::move(warning)};
 }
 
 }  // namespace strokes::config

@@ -38,13 +38,25 @@ void creation_and_persistence() {
   check(loaded.value->gestures.gestures.size() == 3 &&
             loaded.value->gestures.gestures[1].id == "minimize" &&
             loaded.value->gestures.gestures[2].id == "maximize" &&
-            loaded.value->profiles.global_actions.at("minimize").value == "ALT+SPACE,N" &&
-            loaded.value->profiles.global_actions.at("maximize").value == "WIN+UP",
+            *actions::keyboard_shortcut(loaded.value->profiles.global_actions.at("minimize")) ==
+                "ALT+SPACE,N" &&
+            *actions::keyboard_shortcut(loaded.value->profiles.global_actions.at("maximize")) ==
+                "WIN+UP",
         "defaults include editable diagonal minimize and maximize gestures");
   loaded.value->global.gestures_enabled = false;
   loaded.value->global.movement_threshold = 17;
-  loaded.value->profiles.global_actions.at("right").value = "CTRL+W";
-  loaded.value->profiles.global_actions.at("minimize").value = "ALT+F9";
+  *actions::keyboard_shortcut(loaded.value->profiles.global_actions.at("right")) = "CTRL+W";
+  *actions::keyboard_shortcut(loaded.value->profiles.global_actions.at("minimize")) = "ALT+F9";
+  const actions::ActionDefinition process_action{
+      1, actions::ActionType::process,
+      actions::ProcessParameters{actions::ProcessOperation::launch, "tool.exe", "--flag",
+                                 "C:\\Tools"}};
+  const actions::ActionDefinition mouse_action{
+      1, actions::ActionType::mouse,
+      actions::MouseParameters{actions::MouseOperation::click, actions::MouseButton::left,
+                               {actions::PositionTarget::gesture_start, std::nullopt}}};
+  loaded.value->profiles.global_actions.emplace("process", process_action);
+  loaded.value->profiles.global_actions.emplace("mouse", mouse_action);
   std::string error;
   loaded.value->gestures.gestures.push_back(
       {"down", "Down", true, {{"down-1", {{4, 2}, {4, 20}}}}});
@@ -53,21 +65,27 @@ void creation_and_persistence() {
        "Notes",
        true,
        {{context::ApplicationProperty::process_name, context::MatchMode::contains, "notepad"}},
-       {{"down", {actions::ActionType::keyboard_shortcut, "CTRL+S"}}}});
+       {{"down", actions::ActionDefinition::keyboard("CTRL+S")}}});
   check(store.save(*loaded.value, error), "configuration bundle saves atomically");
   auto reloaded = store.load();
   check(reloaded && !reloaded.value->global.gestures_enabled &&
             reloaded.value->global.movement_threshold == 17,
         "global options persist across reload");
-  check(reloaded && reloaded.value->profiles.global_actions.at("right").value == "CTRL+W",
+  check(reloaded && *actions::keyboard_shortcut(
+                          reloaded.value->profiles.global_actions.at("right")) == "CTRL+W",
         "action mappings persist across reload");
-  check(reloaded && reloaded.value->profiles.global_actions.at("minimize").value == "ALT+F9",
+  check(reloaded && *actions::keyboard_shortcut(
+                          reloaded.value->profiles.global_actions.at("minimize")) == "ALT+F9",
         "the minimize gesture shortcut remains user-configurable across reloads");
+  check(reloaded && reloaded.value->profiles.global_actions.at("process") == process_action &&
+            reloaded.value->profiles.global_actions.at("mouse") == mouse_action,
+        "generic action mappings and optional parameters survive save, restart, and reload");
   check(reloaded && reloaded.value->gestures.gestures.size() == 4 &&
             reloaded.value->gestures.gestures[3].templates[0].points.size() == 2,
         "gesture definitions and templates persist across reload");
   check(reloaded && reloaded.value->profiles.profiles.size() == 1 &&
-            reloaded.value->profiles.profiles[0].actions_by_gesture.at("down").value == "CTRL+S",
+            *actions::keyboard_shortcut(
+                reloaded.value->profiles.profiles[0].actions_by_gesture.at("down")) == "CTRL+S",
         "profiles, criteria, and overrides persist across reload");
 }
 void malformed_and_recovery() {

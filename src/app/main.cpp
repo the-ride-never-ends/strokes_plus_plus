@@ -1,5 +1,12 @@
 #include "actions/action_resolver.h"
+#include "actions/windows_audio_service.h"
 #include "actions/windows_keyboard_input.h"
+#include "actions/windows_media_service.h"
+#include "actions/windows_mouse_service.h"
+#include "actions/windows_process_service.h"
+#include "actions/windows_shell_service.h"
+#include "actions/windows_window_service.h"
+#include "actions/windows_virtual_desktop_service.h"
 #include "config/configuration_store.h"
 #include "config/windows_app_data.h"
 #include "context/windows_application_context.h"
@@ -452,7 +459,14 @@ class EngineHost {
         application_context_, modifier_state_, mouse_click_, keyboard_input_,
         input::GestureStateMachine(
             {configuration_.global.minimum_point_distance, configuration_.global.maximum_points}),
-        configuration_.global.overlay.enabled ? &overlay_ : nullptr);
+        configuration_.global.overlay.enabled ? &overlay_ : nullptr,
+        actions::ActionServices{.process = &process_service_,
+                                .shell = &shell_service_,
+                                .mouse = &mouse_service_,
+                                .window = &window_service_,
+                                .media = &media_service_,
+                                .audio = &audio_service_,
+                                .virtual_desktop = &desktop_service_});
 
     while (!stop.stop_requested()) {
       const auto event = events_.wait_pop();
@@ -500,10 +514,32 @@ class EngineHost {
       }
     }
     if (result.action_attempted && logger_) {
+      const auto error = result.action_result ? result.action_result->error : actions::ActionError::none;
+      const char* error_category = "none";
+      switch (error) {
+        case actions::ActionError::none: break;
+        case actions::ActionError::invalid_definition: error_category = "invalid_definition"; break;
+        case actions::ActionError::invalid_runtime_target:
+          error_category = "invalid_runtime_target";
+          break;
+        case actions::ActionError::unsupported_operation:
+          error_category = "unsupported_operation";
+          break;
+        case actions::ActionError::platform_failure: error_category = "platform_failure"; break;
+        case actions::ActionError::execution_exception:
+          error_category = "execution_exception";
+          break;
+      }
       (void)logger_->log(
           result.action_succeeded ? "action_execution" : "action_failure",
           {{"succeeded", result.action_succeeded},
            {"profile_id", result.profile_id},
+           {"action_type", result.action_type},
+           {"operation", result.action_operation},
+           {"target", result.action_target},
+           {"error_category", error_category},
+           {"error_code", result.action_result ? result.action_result->code : ""},
+           {"message", result.action_result ? result.action_result->message : ""},
            {"source", result.action_source == actions::ActionSource::application_profile
                           ? "application_profile"
                           : "global"}});
@@ -529,6 +565,13 @@ class EngineHost {
   input::WindowsMouseClick mouse_click_;
   actions::PhysicalKeyState physical_keys_;
   actions::WindowsKeyboardInput keyboard_input_{physical_keys_};
+  actions::WindowsProcessService process_service_;
+  actions::WindowsShellService shell_service_;
+  actions::WindowsMouseService mouse_service_;
+  actions::WindowsWindowService window_service_;
+  actions::WindowsMediaService media_service_;
+  actions::WindowsAudioService audio_service_;
+  actions::WindowsVirtualDesktopService desktop_service_;
   input::EventPump<input::MouseInputEvent, 4096> events_;
   std::mutex save_mutex_;
   std::condition_variable_any save_wake_;

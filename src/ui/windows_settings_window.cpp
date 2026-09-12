@@ -181,7 +181,7 @@ void WindowsSettingsWindow::create_controls() {
   control(window_, L"EDIT", L"", ES_AUTOHSCROLL, threshold_id, 200, 340, 100, 24);
 
   gestures_.emplace(window_, instance_, working_);
-  profiles_.emplace(window_, working_);
+  profiles_.emplace(window_, instance_, working_);
   gestures_->create();
   profiles_->create();
 
@@ -223,23 +223,23 @@ void WindowsSettingsWindow::show_help() const noexcept {
       L"suitable for normal gestures.\n\n"
       L"Recognition threshold\nThe required similarity from 0 to 1. Higher values are stricter; "
       L"lower values accept more variation but can increase false matches.\n\n"
-      L"GESTURES AND SHORTCUTS\n\n"
+      L"GESTURES AND ACTIONS\n\n"
       L"Gestures lists the shapes you have created and their sample counts. Add creates one, "
       L"Rename changes its name, Delete removes it, Train records another example, and Remove last "
       L"sample removes its newest example. Enable / Disable controls whether that gesture can be "
       L"recognized.\n\n"
-      L"Selected gesture global shortcut is the keyboard shortcut used when no matching application "
-      L"profile overrides it. Enter a shortcut such as CTRL+W or ALT+LEFT, or a sequence such as "
-      L"ALT+SPACE,N, then click Assign.\n\n"
+      L"Selected gesture global action is used when no matching application profile overrides it. "
+      L"Configure opens the action editor, where you can choose a keyboard shortcut, program, URI, "
+      L"mouse, window, media, volume, or virtual-desktop action. Remove clears the mapping.\n\n"
       L"APPLICATION PROFILES\n\n"
-      L"Profiles let the same gesture perform different shortcuts in different applications. Add, "
+      L"Profiles let the same gesture perform different actions in different applications. Add, "
       L"Rename, Delete, and Enable / Disable manage the selected profile.\n\n"
       L"Match field chooses the application property: process name, window title, or window class. "
       L"Match mode chooses Exact, Contains, or Regular expression. Match value is the text or pattern "
       L"to compare. Add criterion adds it to the selected profile; Update criterion edits the selected "
       L"criterion; Remove criterion deletes it. All criteria in a profile must match.\n\n"
-      L"Override shortcut replaces the global shortcut for the selected gesture when this profile "
-      L"matches. Enter the shortcut and click Assign override.\n\n"
+      L"Override action replaces the global action for the selected gesture when this profile "
+      L"matches. Configure override opens the same action editor.\n\n"
       L"Save applies all changes. Cancel closes Settings without applying them.";
   ::MessageBoxW(window_, help, L"Strokes++ Settings Help", MB_OK | MB_ICONINFORMATION);
 }

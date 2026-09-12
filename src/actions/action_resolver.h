@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "actions/action.h"
+#include "actions/action_definition.h"
 #include "context/application_context.h"
 #include "context/application_profile.h"
 #include "context/profile_matcher.h"
@@ -18,7 +18,7 @@ enum class ActionSource {
 };
 
 struct ResolvedAction {
-  Action action;
+  ActionDefinition action;
   ActionSource source{ActionSource::global};
   std::string profile_id;
 };
@@ -26,7 +26,7 @@ struct ResolvedAction {
 /// Resolves a recognized gesture to the first matching profile action or global fallback.
 class ActionResolver {
  public:
-  using GlobalActions = std::unordered_map<std::string, Action>;
+  using GlobalActions = std::unordered_map<std::string, ActionDefinition>;
 
   [[nodiscard]] static std::optional<ResolvedAction> resolve(
       const std::string& gesture_id, const context::ApplicationContext& application,
