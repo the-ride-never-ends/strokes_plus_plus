@@ -533,6 +533,8 @@ class EngineHost {
       (void)logger_->log(
           result.action_succeeded ? "action_execution" : "action_failure",
           {{"succeeded", result.action_succeeded},
+           {"gesture_id", result.recognition ? result.recognition->gesture_id : ""},
+           {"gesture_name", result.recognition ? result.recognition->gesture_name : ""},
            {"profile_id", result.profile_id},
            {"action_type", result.action_type},
            {"operation", result.action_operation},

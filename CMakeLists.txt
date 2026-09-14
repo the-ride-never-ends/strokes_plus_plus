@@ -59,23 +59,25 @@ if(WIN32)
         src/ui/windows_gesture_trainer.cpp
         src/ui/settings_controls.cpp
         src/ui/gesture_editor.cpp
+        src/ui/gesture_inventory.cpp
         src/ui/profile_editor.cpp
     )
     target_include_directories(strokes_windows PUBLIC src)
-    target_link_libraries(strokes_windows PUBLIC strokes_core user32 shell32 ole32 uuid comdlg32)
+    target_link_libraries(strokes_windows PUBLIC strokes_core user32 shell32 ole32 uuid comdlg32
+                                                   comctl32)
     target_compile_features(strokes_windows PUBLIC cxx_std_20)
     if(MSVC)
         target_compile_options(strokes_windows PRIVATE /W4 /permissive- /EHsc)
     endif()
 
-    add_executable(GestureEngine WIN32
+    add_executable(StrokesPlusPlus WIN32
         src/app/main.cpp
         resources/strokes_plus_plus.rc
     )
-    target_link_libraries(GestureEngine PRIVATE strokes_windows psapi)
-    target_compile_features(GestureEngine PRIVATE cxx_std_20)
+    target_link_libraries(StrokesPlusPlus PRIVATE strokes_windows psapi)
+    target_compile_features(StrokesPlusPlus PRIVATE cxx_std_20)
     if(MSVC)
-        target_compile_options(GestureEngine PRIVATE /W4 /permissive- /EHsc)
+        target_compile_options(StrokesPlusPlus PRIVATE /W4 /permissive- /EHsc)
     endif()
 endif()
 
@@ -128,7 +130,7 @@ if(STROKES_BUILD_TESTS)
             target_compile_options(strokes_windows_smoke_tests PRIVATE /W4 /permissive- /EHsc)
         endif()
         add_test(NAME strokes_windows_smoke_tests COMMAND strokes_windows_smoke_tests)
-        add_test(NAME gesture_engine_idle_test COMMAND GestureEngine --idle-test)
-        set_tests_properties(gesture_engine_idle_test PROPERTIES TIMEOUT 10)
+        add_test(NAME strokes_plus_plus_idle_test COMMAND StrokesPlusPlus --idle-test)
+        set_tests_properties(strokes_plus_plus_idle_test PROPERTIES TIMEOUT 10)
     endif()
 endif()

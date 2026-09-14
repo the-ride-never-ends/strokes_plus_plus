@@ -24,44 +24,54 @@ using detail::text;
 using detail::wide;
 
 void ProfileEditor::create() {
-  text(window_, 0, L"Application profiles", 410, 294);
-  control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, profiles_id, 400, 320, 240, 100);
-  text(window_, 0, L"Profile name", 400, 426, 100);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, profile_name_id, 500, 422, 140, 24);
-  text(window_, 0, L"Match field", 400, 456, 100);
-  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, profile_property_id, 500, 452, 140, 120);
+  text(window_, profile_section_label_id, L"Application profiles", 25, 50, 210);
+  control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, profiles_id, 25, 75, 210, 160);
+  text(window_, profile_name_label_id, L"Profile name", 250, 50, 100);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, profile_name_id, 250, 75, 180, 24);
+  text(window_, profile_property_label_id, L"Match field", 340, 300, 90);
+  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, profile_property_id, 430, 296, 195, 120);
   for (auto* value : {L"Process", L"Window title", L"Window class"})
     ::SendDlgItemMessageW(window_, profile_property_id, CB_ADDSTRING, 0,
                           reinterpret_cast<LPARAM>(value));
   ::SendDlgItemMessageW(window_, profile_property_id, CB_SETCURSEL, 0, 0);
-  text(window_, 0, L"Match mode", 400, 486, 100);
-  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, profile_mode_id, 500, 482, 140, 120);
+  text(window_, profile_mode_label_id, L"Match mode", 340, 332, 90);
+  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, profile_mode_id, 430, 328, 195, 120);
   for (auto* value : {L"Exact", L"Contains", L"Regular expression"})
     ::SendDlgItemMessageW(window_, profile_mode_id, CB_ADDSTRING, 0,
                           reinterpret_cast<LPARAM>(value));
   ::SendDlgItemMessageW(window_, profile_mode_id, CB_SETCURSEL, 0, 0);
-  text(window_, 0, L"Match value", 400, 516, 100);
+  text(window_, profile_value_label_id, L"Match value", 340, 364, 90);
   HWND process_values =
       control(window_, L"COMBOBOX", L"", CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL,
-              profile_value_id, 500, 512, 140, 180);
+              profile_value_id, 430, 360, 195, 180);
   populate_processes(process_values);
-  control(window_, L"BUTTON", L"Add", BS_PUSHBUTTON, profile_add_id, 400, 542, 60, 26);
-  control(window_, L"BUTTON", L"Rename", BS_PUSHBUTTON, profile_update_id, 464, 542, 70, 26);
-  control(window_, L"BUTTON", L"Delete", BS_PUSHBUTTON, profile_delete_id, 538, 542, 70, 26);
-  text(window_, 0, L"Override action", 400, 580, 100);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, profile_shortcut_id, 500, 576, 140, 24);
-  control(window_, L"BUTTON", L"Enable / Disable", BS_PUSHBUTTON, profile_toggle_id, 400, 606, 96,
+  control(window_, L"BUTTON", L"Add", BS_PUSHBUTTON, profile_add_id, 440, 75, 50, 26);
+  control(window_, L"BUTTON", L"Rename", BS_PUSHBUTTON, profile_update_id, 494, 75, 62, 26);
+  control(window_, L"BUTTON", L"Delete", BS_PUSHBUTTON, profile_delete_id, 560, 75, 60, 26);
+  control(window_, L"BUTTON", L"Enable / Disable", BS_PUSHBUTTON, profile_toggle_id, 250, 109, 110,
           26);
-  control(window_, L"BUTTON", L"Configure override", BS_PUSHBUTTON, profile_assign_id, 500, 606, 140,
+  text(window_, profile_override_label_id, L"Override action", 250, 145, 100);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, profile_shortcut_id, 350, 141, 170, 24);
+  control(window_, L"BUTTON", L"Configure override", BS_PUSHBUTTON, profile_assign_id, 528, 141, 97,
           26);
-  text(window_, 0, L"Selected profile criteria", 20, 424, 220);
-  control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, profile_criteria_id, 20, 450, 340,
-          100);
-  control(window_, L"BUTTON", L"Add criterion", BS_PUSHBUTTON, criterion_add_id, 20, 556, 100, 26);
-  control(window_, L"BUTTON", L"Update criterion", BS_PUSHBUTTON, criterion_update_id, 124, 556,
-          108, 26);
-  control(window_, L"BUTTON", L"Remove criterion", BS_PUSHBUTTON, criterion_remove_id, 236, 556,
-          108, 26);
+  text(window_, profile_criteria_label_id, L"Selected profile criteria", 25, 275, 260);
+  control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, profile_criteria_id, 25, 300, 295,
+          170);
+  control(window_, L"BUTTON", L"Add criterion", BS_PUSHBUTTON, criterion_add_id, 25, 476, 90, 24);
+  control(window_, L"BUTTON", L"Update criterion", BS_PUSHBUTTON, criterion_update_id, 119, 476,
+          96, 24);
+  control(window_, L"BUTTON", L"Remove criterion", BS_PUSHBUTTON, criterion_remove_id, 219, 476,
+          101, 24);
+}
+
+void ProfileEditor::set_visible(bool visible) const noexcept {
+  for (const int id : {profile_section_label_id, profile_name_label_id, profile_property_label_id,
+                       profile_mode_label_id, profile_value_label_id, profile_override_label_id,
+                       profile_criteria_label_id, profiles_id, profile_name_id, profile_property_id,
+                       profile_mode_id, profile_value_id, profile_criteria_id, criterion_add_id,
+                       criterion_update_id, criterion_remove_id, profile_shortcut_id, profile_add_id,
+                       profile_update_id, profile_delete_id, profile_toggle_id, profile_assign_id})
+    ::ShowWindow(::GetDlgItem(window_, id), visible ? SW_SHOW : SW_HIDE);
 }
 
 bool ProfileEditor::handle(int command, int notification, const std::string& gesture_id) {

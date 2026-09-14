@@ -399,9 +399,12 @@ std::optional<actions::ActionDefinition> decode_action(const Value& value) {
   } else if (*type == "mouse") {
     const auto* operation = field_as<std::string>(*object, "operation");
     const auto* encoded_position = field(*object, "position");
-    if (operation && encoded_position) {
+    if (operation) {
       const auto decoded_operation = decode_mouse_operation(*operation);
-      const auto position = decode_position(*encoded_position);
+      const auto position = encoded_position
+                                ? decode_position(*encoded_position)
+                                : std::optional<actions::PositionDefinition>{
+                                      actions::PositionDefinition{}};
       std::optional<actions::MouseButton> button;
       bool button_valid = true;
       if (const auto* encoded_button = field_as<std::string>(*object, "button")) {

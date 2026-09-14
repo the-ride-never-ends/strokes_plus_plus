@@ -442,13 +442,18 @@ void WindowsActionEditor::rescale_children(UINT old_dpi, UINT new_dpi) noexcept 
     ::GetWindowRect(child, &bounds);
     POINT corners[]{{bounds.left, bounds.top}, {bounds.right, bounds.bottom}};
     ::MapWindowPoints(HWND_DESKTOP, window_, corners, 2);
+    const auto combo_height = reinterpret_cast<INT_PTR>(
+        ::GetPropW(child, L"StrokesPlusPlus.ComboDropHeight"));
+    const int height = combo_height > 0
+                           ? ::MulDiv(static_cast<int>(combo_height), static_cast<int>(new_dpi), 96)
+                           : ::MulDiv(corners[1].y - corners[0].y, static_cast<int>(new_dpi),
+                                      static_cast<int>(old_dpi));
     ::SetWindowPos(child, nullptr,
                    ::MulDiv(corners[0].x, static_cast<int>(new_dpi), static_cast<int>(old_dpi)),
                    ::MulDiv(corners[0].y, static_cast<int>(new_dpi), static_cast<int>(old_dpi)),
                    ::MulDiv(corners[1].x - corners[0].x, static_cast<int>(new_dpi),
                             static_cast<int>(old_dpi)),
-                   ::MulDiv(corners[1].y - corners[0].y, static_cast<int>(new_dpi),
-                            static_cast<int>(old_dpi)),
+                   height,
                    SWP_NOACTIVATE | SWP_NOZORDER);
   }
 }

@@ -220,6 +220,25 @@ void profile_tests() {
   check(legacy &&
             *actions::keyboard_shortcut(legacy.value->global_actions.at("left")) == "CTRL+W",
         "Phase 1 keyboard actions without an action version remain compatible");
+  for (const auto* text : {
+           R"({"type":"mouse","operation":"click","button":"left"})",
+           R"({"type":"mouse","operation":"double_click","button":"left"})",
+           R"({"type":"mouse","operation":"down","button":"left"})",
+           R"({"type":"mouse","operation":"up","button":"left"})"}) {
+    const auto parsed = json::parse(std::string{"{\"version\":1,\"profiles\":[],"
+                                                "\"global_actions\":{\"example\":"} +
+                                    text + "}}");
+    const auto decoded = parsed ? decode_profiles(*parsed.value)
+                                : DecodeResult<ProfileFile>{{}, "invalid test JSON"};
+    const actions::MouseParameters* mouse = nullptr;
+    if (decoded) {
+      const auto action = decoded.value->global_actions.find("example");
+      if (action != decoded.value->global_actions.end())
+        mouse = std::get_if<actions::MouseParameters>(&action->second.parameters);
+    }
+    check(mouse && mouse->position.target == actions::PositionTarget::current_cursor,
+          "documented mouse actions default an omitted position to current_cursor");
+  }
   const auto mixed_actions_json = json::parse(
       R"({"version":1,"profiles":[],"global_actions":{"good":{"type":"url","version":1,"url":"https://example.com"},"bad":{"type":"future_action","version":1}}})");
   const auto mixed_actions = mixed_actions_json

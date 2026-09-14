@@ -2,8 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <CommCtrl.h>
+#include <Richedit.h>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "ui/settings_controls.h"
 #include "ui/settings_ids.h"
@@ -11,6 +14,30 @@
 namespace strokes::ui {
 namespace {
 constexpr wchar_t class_name[] = L"StrokesPlusPlusSettingsWindow";
+constexpr wchar_t tooltip_property[] = L"StrokesPlusPlus.SettingsTooltip";
+constexpr wchar_t gestures_enabled_help[] =
+    L"Turns gesture recognition on or off. Ordinary mouse input should continue to work while "
+    L"this is off.";
+constexpr wchar_t activation_button_help[] =
+    L"The mouse button you hold while drawing a gesture. A short press without enough movement "
+    L"remains an ordinary click.";
+constexpr wchar_t overlay_enabled_help[] = L"Shows the line you draw while capturing a gesture.";
+constexpr wchar_t overlay_width_help[] =
+    L"The thickness of the on-screen gesture line, in pixels.";
+constexpr wchar_t overlay_opacity_help[] =
+    L"The visibility of the gesture line from 0 to 1. Lower values are more transparent.";
+constexpr wchar_t movement_threshold_help[] =
+    L"How far, in pixels at 100% display scaling, the pointer must move before a held activation "
+    L"button becomes a gesture. Higher values make accidental gestures less likely.";
+constexpr wchar_t point_distance_help[] =
+    L"The minimum distance between recorded stroke points. Lower values capture more detail; "
+    L"higher values produce simpler strokes.";
+constexpr wchar_t maximum_points_help[] =
+    L"The largest number of points retained for one gesture. The default is suitable for normal "
+    L"gestures.";
+constexpr wchar_t recognition_threshold_help[] =
+    L"The required similarity from 0 to 1. Higher values are stricter; lower values accept more "
+    L"variation but can increase false matches.";
 
 constexpr std::array<input::ActivationButton, 4> configurable_buttons{
     input::ActivationButton::right, input::ActivationButton::middle,
@@ -41,6 +68,7 @@ bool WindowsSettingsWindow::show(HINSTANCE instance, config::ConfigurationBundle
   working_ = configuration;
   accepted_ = false;
   finished_ = false;
+  advanced_expanded_ = false;
   WNDCLASSEXW wc{sizeof(wc)};
   wc.lpfnWndProc = window_proc;
   wc.hInstance = instance_;
@@ -80,6 +108,7 @@ bool WindowsSettingsWindow::show(HINSTANCE instance, config::ConfigurationBundle
   if (message.message == WM_QUIT) ::PostQuitMessage(static_cast<int>(message.wParam));
   if (accepted_) *destination_ = std::move(working_);
   gestures_.reset();
+  inventory_.reset();
   profiles_.reset();
   if (registered != 0) ::UnregisterClassW(class_name, instance_);
   return accepted_;
@@ -112,6 +141,14 @@ LRESULT WindowsSettingsWindow::handle_message(UINT message, WPARAM wp, LPARAM lp
                    bounds->bottom - bounds->top, SWP_NOACTIVATE | SWP_NOZORDER);
     return 0;
   }
+  if (message == WM_NOTIFY) {
+    const auto* notification = reinterpret_cast<const NMHDR*>(lp);
+    if (notification && notification->idFrom == editor_tabs_id &&
+        notification->code == TCN_SELCHANGE) {
+      select_editor_tab();
+      return 0;
+    }
+  }
   if (message == WM_COMMAND) return handle_command(wp);
   if (message == WM_CLOSE) {
     ::DestroyWindow(window_);
@@ -142,8 +179,9 @@ LRESULT WindowsSettingsWindow::handle_command(WPARAM wp) {
     ::DestroyWindow(window_);
     return 0;
   }
-  if (command == help_id) {
-    show_help();
+  if (command == advanced_section_label_id && notification == BN_CLICKED) {
+    advanced_expanded_ = !advanced_expanded_;
+    show_advanced_settings(true);
     return 0;
   }
   if (!gestures_ || !profiles_) return 0;
@@ -158,38 +196,83 @@ LRESULT WindowsSettingsWindow::handle_command(WPARAM wp) {
 }
 
 void WindowsSettingsWindow::create_controls() {
-  text(window_, 0, L"Simple settings", 16, 12, 220);
-  control(window_, L"BUTTON", L"Gestures enabled", BS_AUTOCHECKBOX, enabled_id, 20, 42, 180, 24);
-  text(window_, 0, L"Activation button", 20, 76);
-  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, button_id, 200, 72, 180, 180);
+  INITCOMMONCONTROLSEX common_controls{sizeof(common_controls), ICC_WIN95_CLASSES};
+  (void)::InitCommonControlsEx(&common_controls);
+  tooltip_ = ::CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
+                               WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, CW_USEDEFAULT,
+                               CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, window_, nullptr,
+                               instance_, nullptr);
+  if (tooltip_) {
+    (void)::SetPropW(window_, tooltip_property, tooltip_);
+    ::SendMessageW(tooltip_, TTM_SETMAXTIPWIDTH, 0, 420);
+    ::SetWindowPos(tooltip_, HWND_TOPMOST, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+  }
+  editor_tabs_ = control(window_, WC_TABCONTROLW, L"", WS_CLIPSIBLINGS, editor_tabs_id, 10, 10,
+                         650, 650);
+  TCITEMW tab{};
+  tab.mask = TCIF_TEXT;
+  tab.pszText = const_cast<wchar_t*>(L"Options");
+  (void)::SendMessageW(editor_tabs_, TCM_INSERTITEMW, 0, reinterpret_cast<LPARAM>(&tab));
+  tab.pszText = const_cast<wchar_t*>(L"Global Actions");
+  (void)::SendMessageW(editor_tabs_, TCM_INSERTITEMW, 1, reinterpret_cast<LPARAM>(&tab));
+  tab.pszText = const_cast<wchar_t*>(L"Applications");
+  (void)::SendMessageW(editor_tabs_, TCM_INSERTITEMW, 2, reinterpret_cast<LPARAM>(&tab));
+  tab.pszText = const_cast<wchar_t*>(L"Gestures");
+  (void)::SendMessageW(editor_tabs_, TCM_INSERTITEMW, 3, reinterpret_cast<LPARAM>(&tab));
+  tab.pszText = const_cast<wchar_t*>(L"Help");
+  (void)::SendMessageW(editor_tabs_, TCM_INSERTITEMW, 4, reinterpret_cast<LPARAM>(&tab));
+  (void)::SendMessageW(editor_tabs_, TCM_SETCURSEL, 0, 0);
+
+  text(window_, settings_section_label_id, L"Simple settings", 25, 50, 220);
+  auto* enabled = control(window_, L"BUTTON", L"Gestures enabled", BS_AUTOCHECKBOX, enabled_id,
+                          30, 82, 180, 24);
+  add_tooltip(enabled, gestures_enabled_help);
+  add_tooltip(text(window_, activation_label_id, L"Activation button", 30, 116),
+              activation_button_help);
+  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, button_id, 210, 112, 180, 180);
   for (auto* value : {L"Right", L"Middle", L"XButton1", L"XButton2"})
     ::SendDlgItemMessageW(window_, button_id, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(value));
-  control(window_, L"BUTTON", L"Overlay enabled", BS_AUTOCHECKBOX, overlay_id, 20, 110, 180, 24);
-  text(window_, 0, L"Overlay line width", 20, 144);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, width_id, 200, 140, 100, 24);
-  text(window_, 0, L"Overlay opacity (0-1)", 20, 178);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, opacity_id, 200, 174, 100, 24);
+  auto* overlay = control(window_, L"BUTTON", L"Overlay enabled", BS_AUTOCHECKBOX, overlay_id,
+                          30, 150, 180, 24);
+  add_tooltip(overlay, overlay_enabled_help);
+  add_tooltip(text(window_, overlay_width_label_id, L"Overlay line width", 30, 184),
+              overlay_width_help);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, width_id, 210, 180, 100, 24);
+  add_tooltip(text(window_, overlay_opacity_label_id, L"Overlay opacity (0-1)", 30, 218),
+              overlay_opacity_help);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, opacity_id, 210, 214, 100, 24);
 
-  text(window_, 0, L"Advanced settings", 16, 212, 220);
-  text(window_, 0, L"Movement threshold", 20, 242);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, move_id, 200, 238, 100, 24);
-  text(window_, 0, L"Point distance", 20, 276);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, distance_id, 200, 272, 100, 24);
-  text(window_, 0, L"Maximum points", 20, 310);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, max_id, 200, 306, 100, 24);
-  text(window_, 0, L"Recognition threshold", 20, 344);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, threshold_id, 200, 340, 100, 24);
+  control(window_, L"BUTTON", L"\x25B6 Advanced settings", BS_PUSHBUTTON,
+          advanced_section_label_id, 25, 254, 180, 28);
+  add_tooltip(text(window_, movement_label_id, L"Movement threshold", 30, 294),
+              movement_threshold_help);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, move_id, 210, 290, 100, 24);
+  add_tooltip(text(window_, distance_label_id, L"Point distance", 30, 328), point_distance_help);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, distance_id, 210, 324, 100, 24);
+  add_tooltip(text(window_, maximum_label_id, L"Maximum points", 30, 362), maximum_points_help);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, max_id, 210, 358, 100, 24);
+  add_tooltip(text(window_, recognition_label_id, L"Recognition threshold", 30, 396),
+              recognition_threshold_help);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, threshold_id, 210, 392, 100, 24);
 
   gestures_.emplace(window_, instance_, working_);
+  inventory_.emplace(window_, instance_, working_);
   profiles_.emplace(window_, instance_, working_);
   gestures_->create();
+  inventory_->create();
   profiles_->create();
+  (void)::LoadLibraryW(L"Msftedit.dll");
+  control(window_, MSFTEDIT_CLASS, L"",
+          ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL, help_text_id, 25, 50, 610,
+          590);
+  select_editor_tab();
 
-  control(window_, L"BUTTON", L"Help", BS_PUSHBUTTON, help_id, 350, 670, 90, 30);
   control(window_, L"BUTTON", L"Save", BS_DEFPUSHBUTTON, save_id, 450, 670, 90, 30);
   control(window_, L"BUTTON", L"Cancel", BS_PUSHBUTTON, cancel_id, 550, 670, 90, 30);
   ::EnumChildWindows(window_, apply_font,
                      reinterpret_cast<LPARAM>(::GetStockObject(DEFAULT_GUI_FONT)));
+  load_help();
   current_dpi_ = ::GetDpiForWindow(window_);
   if (current_dpi_ != 96) {
     rescale_children(96, current_dpi_);
@@ -202,46 +285,149 @@ void WindowsSettingsWindow::create_controls() {
   }
 }
 
-void WindowsSettingsWindow::show_help() const noexcept {
-  constexpr wchar_t help[] =
-      L"SIMPLE SETTINGS\n\n"
-      L"Gestures enabled\nTurns gesture recognition on or off. Ordinary mouse input should "
-      L"continue to work while this is off.\n\n"
-      L"Activation button\nThe mouse button you hold while drawing a gesture. A short press "
-      L"without enough movement remains an ordinary click.\n\n"
-      L"Overlay enabled\nShows the line you draw while capturing a gesture.\n\n"
-      L"Overlay line width\nThe thickness of the on-screen gesture line, in pixels.\n\n"
-      L"Overlay opacity\nThe visibility of the gesture line from 0 to 1. Lower values are more "
-      L"transparent.\n\n"
-      L"ADVANCED SETTINGS\n\n"
-      L"Movement threshold\nHow far, in pixels at 100% display scaling, the pointer must move "
-      L"before a held activation button becomes a gesture. Higher values make accidental gestures "
-      L"less likely.\n\n"
-      L"Point distance\nThe minimum distance between recorded stroke points. Lower values capture "
-      L"more detail; higher values produce simpler strokes.\n\n"
-      L"Maximum points\nThe largest number of points retained for one gesture. The default is "
-      L"suitable for normal gestures.\n\n"
-      L"Recognition threshold\nThe required similarity from 0 to 1. Higher values are stricter; "
-      L"lower values accept more variation but can increase false matches.\n\n"
-      L"GESTURES AND ACTIONS\n\n"
-      L"Gestures lists the shapes you have created and their sample counts. Add creates one, "
-      L"Rename changes its name, Delete removes it, Train records another example, and Remove last "
-      L"sample removes its newest example. Enable / Disable controls whether that gesture can be "
-      L"recognized.\n\n"
-      L"Selected gesture global action is used when no matching application profile overrides it. "
-      L"Configure opens the action editor, where you can choose a keyboard shortcut, program, URI, "
-      L"mouse, window, media, volume, or virtual-desktop action. Remove clears the mapping.\n\n"
-      L"APPLICATION PROFILES\n\n"
-      L"Profiles let the same gesture perform different actions in different applications. Add, "
-      L"Rename, Delete, and Enable / Disable manage the selected profile.\n\n"
-      L"Match field chooses the application property: process name, window title, or window class. "
-      L"Match mode chooses Exact, Contains, or Regular expression. Match value is the text or pattern "
-      L"to compare. Add criterion adds it to the selected profile; Update criterion edits the selected "
-      L"criterion; Remove criterion deletes it. All criteria in a profile must match.\n\n"
-      L"Override action replaces the global action for the selected gesture when this profile "
-      L"matches. Configure override opens the same action editor.\n\n"
-      L"Save applies all changes. Cancel closes Settings without applying them.";
-  ::MessageBoxW(window_, help, L"Strokes++ Settings Help", MB_OK | MB_ICONINFORMATION);
+void WindowsSettingsWindow::select_editor_tab() const noexcept {
+  if (!editor_tabs_ || !gestures_ || !inventory_ || !profiles_) return;
+  const LRESULT selected = ::SendMessageW(editor_tabs_, TCM_GETCURSEL, 0, 0);
+  show_settings(selected == 0);
+  gestures_->set_visible(selected == 1);
+  profiles_->set_visible(selected == 2);
+  inventory_->set_visible(selected == 3);
+  ::ShowWindow(::GetDlgItem(window_, help_text_id), selected == 4 ? SW_SHOW : SW_HIDE);
+}
+
+void WindowsSettingsWindow::show_settings(bool visible) const noexcept {
+  for (const int id : {settings_section_label_id, advanced_section_label_id, activation_label_id,
+                       overlay_width_label_id, overlay_opacity_label_id, enabled_id, button_id,
+                       overlay_id, width_id, opacity_id})
+    ::ShowWindow(::GetDlgItem(window_, id), visible ? SW_SHOW : SW_HIDE);
+  show_advanced_settings(visible);
+}
+
+void WindowsSettingsWindow::show_advanced_settings(bool settings_visible) const noexcept {
+  HWND toggle = ::GetDlgItem(window_, advanced_section_label_id);
+  if (toggle)
+    ::SetWindowTextW(toggle,
+                     advanced_expanded_ ? L"\x25BC Advanced settings"
+                                        : L"\x25B6 Advanced settings");
+  const bool visible = settings_visible && advanced_expanded_;
+  for (const int id : {movement_label_id, distance_label_id, maximum_label_id,
+                       recognition_label_id, move_id, distance_id, max_id, threshold_id})
+    ::ShowWindow(::GetDlgItem(window_, id), visible ? SW_SHOW : SW_HIDE);
+}
+
+void WindowsSettingsWindow::add_tooltip(HWND target, const wchar_t* description) const noexcept {
+  if (!tooltip_ || !target) return;
+  TTTOOLINFOW tool{TTTOOLINFOW_V1_SIZE};
+  tool.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+  tool.hwnd = window_;
+  tool.uId = reinterpret_cast<UINT_PTR>(target);
+  tool.lpszText = const_cast<wchar_t*>(description);
+  (void)::SendMessageW(tooltip_, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
+}
+
+void WindowsSettingsWindow::load_help() const noexcept {
+  struct Span {
+    LONG start;
+    LONG label_end;
+    LONG end;
+    bool heading;
+    bool shaded;
+  };
+  HWND help = ::GetDlgItem(window_, help_text_id);
+  if (!help) return;
+  std::wstring display;
+  std::vector<Span> spans;
+  const auto section = [&](const wchar_t* title) {
+    // Rich Edit uses a single carriage return for an internal paragraph break.
+    // Keeping that representation here makes the formatting character offsets exact.
+    if (!display.empty()) display += L'\r';
+    const LONG start = static_cast<LONG>(display.size());
+    display += title;
+    display += L"\r--------------------------------------------------------\r";
+    const LONG end = static_cast<LONG>(display.size());
+    spans.push_back({start, end, end, true, false});
+  };
+  bool shaded = false;
+  const auto row = [&](const wchar_t* label, const wchar_t* description) {
+    const LONG start = static_cast<LONG>(display.size());
+    display += label;
+    const LONG label_end = static_cast<LONG>(display.size());
+    display += L'\t';
+    display += description;
+    display += L'\r';
+    spans.push_back({start, label_end, static_cast<LONG>(display.size()), false, shaded});
+    shaded = !shaded;
+  };
+
+  section(L"Options");
+  row(L"Gestures enabled", gestures_enabled_help);
+  row(L"Activation button", activation_button_help);
+  row(L"Overlay enabled", overlay_enabled_help);
+  row(L"Overlay line width", overlay_width_help);
+  row(L"Overlay opacity", overlay_opacity_help);
+  section(L"Advanced options");
+  row(L"Movement threshold", movement_threshold_help);
+  row(L"Point distance", point_distance_help);
+  row(L"Maximum points", maximum_points_help);
+  row(L"Recognition threshold", recognition_threshold_help);
+  section(L"Global Actions");
+  row(L"Gestures",
+      L"Lists the shapes you have created and their sample counts. Add creates one, Rename changes "
+      L"its name, Delete removes it, Train records another example, and Remove last sample removes "
+      L"its newest example. Enable / Disable controls whether that gesture can be recognized.");
+  row(L"Global action",
+      L"Used when no matching application profile overrides it. Configure opens the action editor, "
+      L"where you can choose a keyboard shortcut, program, URI, mouse, window, media, volume, or "
+      L"virtual-desktop action. Remove clears the mapping.");
+  section(L"Applications");
+  row(L"Profiles",
+      L"Let the same gesture perform different actions in different applications. Add, Rename, "
+      L"Delete, and Enable / Disable manage the selected profile.");
+  row(L"Matching",
+      L"Match field chooses process name, window title, or window class. Match mode chooses Exact, "
+      L"Contains, or Regular expression. Match value is the text or pattern to compare. Add, Update, "
+      L"and Remove criterion manage the rules. All criteria in a profile must match.");
+  row(L"Override action",
+      L"Replaces the global action for the selected gesture when this profile matches. Configure "
+      L"override opens the same action editor.");
+  row(L"Save / Cancel",
+      L"Save applies all changes. Cancel closes Settings without applying them.");
+  section(L"Gestures");
+  row(L"Activated",
+      L"Shows every enabled gesture pattern in blue, whether or not it is assigned to an action.");
+  row(L"Not Activated",
+      L"Shows every disabled gesture pattern in gray, whether or not it is assigned to an action.");
+
+  ::SetWindowTextW(help, display.c_str());
+  PARAFORMAT2 paragraph{};
+  paragraph.cbSize = sizeof(paragraph);
+  paragraph.dwMask = PFM_TABSTOPS | PFM_SPACEAFTER | PFM_LINESPACING;
+  paragraph.cTabCount = 1;
+  paragraph.rgxTabs[0] = 1900;
+  paragraph.dySpaceAfter = 50;
+  paragraph.bLineSpacingRule = 0;
+  ::SendMessageW(help, EM_SETSEL, 0, -1);
+  ::SendMessageW(help, EM_SETPARAFORMAT, 0, reinterpret_cast<LPARAM>(&paragraph));
+  for (const auto& span : spans) {
+    ::SendMessageW(help, EM_SETSEL, span.start, span.end);
+    CHARFORMAT2W format{};
+    format.cbSize = sizeof(format);
+    format.dwMask = CFM_BOLD | CFM_BACKCOLOR | CFM_SIZE;
+    format.dwEffects = span.heading ? CFE_BOLD : 0;
+    format.yHeight = span.heading ? 220 : 180;
+    format.crBackColor = span.shaded ? RGB(242, 242, 242) : RGB(255, 255, 255);
+    ::SendMessageW(help, EM_SETCHARFORMAT, SCF_SELECTION, reinterpret_cast<LPARAM>(&format));
+    if (!span.heading) {
+      ::SendMessageW(help, EM_SETSEL, span.start, span.label_end);
+      CHARFORMAT2W label_format{};
+      label_format.cbSize = sizeof(label_format);
+      label_format.dwMask = CFM_BOLD;
+      label_format.dwEffects = CFE_BOLD;
+      ::SendMessageW(help, EM_SETCHARFORMAT, SCF_SELECTION,
+                     reinterpret_cast<LPARAM>(&label_format));
+    }
+  }
+  ::SendMessageW(help, EM_SETSEL, 0, 0);
 }
 
 void WindowsSettingsWindow::rescale_children(UINT old_dpi, UINT new_dpi) noexcept {
@@ -252,12 +438,18 @@ void WindowsSettingsWindow::rescale_children(UINT old_dpi, UINT new_dpi) noexcep
     ::GetWindowRect(child, &bounds);
     POINT corners[]{{bounds.left, bounds.top}, {bounds.right, bounds.bottom}};
     ::MapWindowPoints(HWND_DESKTOP, window_, corners, 2);
+    const auto combo_height = reinterpret_cast<INT_PTR>(
+        ::GetPropW(child, L"StrokesPlusPlus.ComboDropHeight"));
+    const int height = combo_height > 0
+                           ? ::MulDiv(static_cast<int>(combo_height), static_cast<int>(new_dpi), 96)
+                           : ::MulDiv(corners[1].y - corners[0].y, static_cast<int>(new_dpi),
+                                      static_cast<int>(old_dpi));
     ::SetWindowPos(
         child, nullptr,
         ::MulDiv(corners[0].x, static_cast<int>(new_dpi), static_cast<int>(old_dpi)),
         ::MulDiv(corners[0].y, static_cast<int>(new_dpi), static_cast<int>(old_dpi)),
         ::MulDiv(corners[1].x - corners[0].x, static_cast<int>(new_dpi), static_cast<int>(old_dpi)),
-        ::MulDiv(corners[1].y - corners[0].y, static_cast<int>(new_dpi), static_cast<int>(old_dpi)),
+        height,
         SWP_NOACTIVATE | SWP_NOZORDER);
   }
 }

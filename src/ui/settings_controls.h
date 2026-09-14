@@ -12,7 +12,7 @@
 namespace strokes::ui::detail {
 
 /// Creates a static label, allocating an identifier when none is supplied.
-void text(HWND parent, int id, const wchar_t* value, int x, int y, int w = 170, int h = 22);
+HWND text(HWND parent, int id, const wchar_t* value, int x, int y, int w = 170, int h = 22);
 /// Creates a focusable child control participating in dialog tab order.
 HWND control(HWND parent, const wchar_t* type, const wchar_t* value, DWORD style, int id, int x,
              int y, int w, int h);

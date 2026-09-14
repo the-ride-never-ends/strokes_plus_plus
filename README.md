@@ -47,7 +47,7 @@ cmake --build build-vs2026 --config Debug
 ctest --test-dir build-vs2026 -C Debug --output-on-failure
 ```
 
-Run `build-vs2026/Debug/GestureEngine.exe` (or the equivalent configured build directory). The application has no taskbar window. Use its notification-area icon to enable or disable gestures, open Settings, or exit. Settings run in-process for the MVP, while recognition and action execution run on the engine worker thread.
+Run `build-vs2026/Debug/StrokesPlusPlus.exe` (or the equivalent configured build directory). The application has no taskbar window. Use its notification-area icon to enable or disable gestures, open Settings, or exit. Settings run in-process for the MVP. Recognition runs on the engine worker thread and actions execute on a separate action worker; the engine currently waits for each action to finish, which is being changed so that a slow action cannot delay the next gesture.
 
 ## Action configuration schema
 
@@ -77,8 +77,10 @@ Actions are stored under `global_actions` or a profile's `actions` object. Each 
 
 Mouse positions may be `current_cursor`, `gesture_start`, `gesture_end`, or `absolute`; absolute
 positions include numeric `x` and `y`. Window targets may be `gesture_window`,
-`foreground_window`, or `window_at_gesture_start`. Move, resize, and move-resize window actions add
-the required `x`, `y`, `width`, and `height` fields.
+`foreground_window`, or `window_at_gesture_start`. Move actions add the required `x` and `y` fields,
+resize actions add `width` and `height`, and move-resize actions add all four. Fields belonging to
+another operation are currently applied if present, so a hand-edited move action that still carries
+`width` and `height` also resizes the window.
 
 Phase 1 keyboard records without an action-level `version` remain supported and are written in the
 versioned representation on the next save. Invalid mappings are skipped independently, so valid
@@ -92,9 +94,12 @@ The same integrity boundary applies to synthetic mouse, media, and virtual-deskt
 may deny foreground activation even for a valid window; this is reported as an action failure.
 URLs and URIs require a registered shell handler. Volume actions require an available default
 output endpoint. Virtual desktop actions use Windows 11 system shortcuts; switching at the first or
-last desktop is a harmless no-op, and behavior can vary on unsupported Windows versions.
+last desktop is a harmless no-op, and behavior can vary on unsupported Windows versions. Strokes++
+does not yet detect whether those shortcuts are available, so a virtual desktop action reports
+success whenever Windows accepts the keystrokes, even on a system where they do nothing. Runtime
+capability detection is planned.
 
-The application performs no network communication, analytics, cloud synchronization, or update checks. Configuration remains under `%LOCALAPPDATA%\StrokesPlusPlus`. Log messages for the current run in are written to `log.txt` beside `GestureEngine.exe` in structured JSON line format.
+The application performs no network communication, analytics, cloud synchronization, or update checks. Configuration remains under `%LOCALAPPDATA%\StrokesPlusPlus`. Log messages for the current run in are written to `log.txt` beside `StrokesPlusPlus.exe` in structured JSON line format.
 
 ## License
 

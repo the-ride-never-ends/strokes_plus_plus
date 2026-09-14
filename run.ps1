@@ -71,9 +71,9 @@ if ($Test) {
 }
 
 if (-not $NoRun) {
-    $executable = Join-Path $buildPath "$Configuration\GestureEngine.exe"
+    $executable = Join-Path $buildPath "$Configuration\StrokesPlusPlus.exe"
     if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
-        throw "GestureEngine.exe was not produced at $executable"
+        throw "StrokesPlusPlus.exe was not produced at $executable"
     }
     Write-Host 'Starting Strokes++ in the notification area'
     Start-Process -FilePath $executable -WorkingDirectory $repositoryRoot -WindowStyle Hidden

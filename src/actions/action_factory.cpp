@@ -68,7 +68,9 @@ ActionFactoryResult ActionFactory::create(const ActionDefinition& definition,
       const auto parameters = std::get<MouseParameters>(definition.parameters);
       return {action([parameters, service = services.mouse](const ActionContext& context) {
                 if (!service) return unavailable("Mouse");
-                const auto position = resolve_position(parameters.position, context);
+                const auto position = parameters.position.target == PositionTarget::current_cursor
+                                          ? service->current_position()
+                                          : resolve_position(parameters.position, context);
                 if (!position) return missing_target("Mouse position");
                 return service->perform(parameters.operation, parameters.button, *position);
               }),

@@ -229,6 +229,16 @@ void factory_tests() {
         "mouse actions resolve contextual positions before service dispatch");
   check(recording.window == 123, "window actions resolve contextual targets before dispatch");
 
+  context.current_cursor_position = gestures::Point{999, 999};
+  auto current_cursor = ActionFactory::create(
+      {1, ActionType::mouse,
+       MouseParameters{MouseOperation::click, MouseButton::left,
+                       {PositionTarget::current_cursor, std::nullopt}}},
+      services);
+  check(current_cursor.action->execute(context).success &&
+            recording.point == gestures::Point{70, 80},
+        "current_cursor is sampled from the mouse service when the action executes");
+
   auto invalid_definition = ActionDefinition::keyboard("CTRL+");
   const auto invalid = ActionFactory::create(invalid_definition, services);
   check(!invalid && !invalid.validation.valid,

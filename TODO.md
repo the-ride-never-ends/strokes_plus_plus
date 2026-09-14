@@ -3,6 +3,10 @@
 Phase 2 turns the Phase 1 gesture-to-shortcut pipeline into a reusable, general-purpose Windows
 action engine. Existing keyboard mappings and application-profile precedence must remain compatible.
 
+Items reopened by the Phase 2 code review ([CODE_REVIEW_PHASE_2_V1.md](CODE_REVIEW_PHASE_2_V1.md))
+are unchecked below. Two decisions were taken with it: action results are delivered asynchronously,
+and virtual-desktop support is detected at runtime rather than assumed.
+
 ## 1. Generalized action model
 
 - [x] Define a serializable `ActionDefinition` independent of concrete C++ action classes.
@@ -39,7 +43,9 @@ action engine. Existing keyboard mappings and application-profile precedence mus
 - [x] Preserve resolution precedence: first matching profile action, then global action, then no
       action.
 - [x] Add an action factory that validates definitions and creates executable actions.
-- [x] Introduce an action executor and queue for sequential execution of short actions.
+- [ ] Introduce an action executor and queue for sequential execution of short actions.
+- [ ] Deliver action results asynchronously so the gesture worker never waits for an action to
+      finish.
 - [x] Keep action execution out of low-level mouse and keyboard hook callbacks.
 - [x] Ensure action failures always return the gesture engine to Idle.
 - [x] Ensure later gestures can execute after any action failure.
@@ -97,6 +103,8 @@ action engine. Existing keyboard mappings and application-profile precedence mus
 - [x] Implement move while preserving existing size.
 - [x] Implement resize while preserving existing origin.
 - [x] Implement combined move and resize.
+- [x] Select window position and size fields by operation so a move cannot resize and a resize
+      cannot move.
 - [x] Support negative coordinates and multi-monitor virtual-desktop geometry.
 - [x] Reject move, resize, and move-resize definitions with missing required values.
 - [x] Validate the target HWND immediately before executing an operation.
@@ -124,10 +132,12 @@ action engine. Existing keyboard mappings and application-profile precedence mus
 - [x] Isolate all virtual-desktop behavior behind a dedicated service.
 - [x] Implement Next Desktop and Previous Desktop using a reliable Windows mechanism.
 - [x] Handle the absence of an adjacent desktop safely.
-- [x] Investigate reliable Create Desktop and Close Desktop support on supported Windows versions.
-- [x] Implement Create Desktop and Close Desktop only where sufficiently reliable.
-- [x] Report unavailable or unsupported operations explicitly.
-- [x] Hide unsupported operations from configuration UI choices.
+- [ ] Detect virtual-desktop capability at runtime instead of assuming the Windows shortcut
+      worked.
+- [ ] Investigate reliable Create Desktop and Close Desktop support on supported Windows versions.
+- [ ] Implement Create Desktop and Close Desktop only where sufficiently reliable.
+- [ ] Report unavailable or unsupported operations explicitly.
+- [ ] Hide unsupported operations from configuration UI choices.
 
 ## 13. Persistence and compatibility
 
@@ -143,6 +153,10 @@ action engine. Existing keyboard mappings and application-profile precedence mus
 
 ## 14. Settings UI
 
+- [x] Ensure every Settings and action-editor dropdown expands to show its available choices at
+      every supported DPI scale.
+- [x] Keep the Match Value process suggestions responsive by listing only executables that own
+      visible top-level application windows and batching combo-box population.
 - [x] Add an action-type selector for Keyboard Shortcut, Launch Program, Open URL, Mouse, Window,
       Media, Volume, and Virtual Desktop.
 - [x] Show only the controls relevant to the selected action type.
@@ -206,7 +220,7 @@ action engine. Existing keyboard mappings and application-profile precedence mus
       the next gesture.
 - [x] Verify all action mappings survive save, restart, and reload.
 - [x] Verify Phase 1 keyboard configurations still load and execute.
-- [x] Verify action execution never blocks the low-level input-hook path.
+- [ ] Verify action execution never blocks the low-level input-hook path.
 
 ## 18. Documentation and release
 

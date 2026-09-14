@@ -366,14 +366,22 @@ ConfigurationBundle ConfigurationStore::defaults() {
        true,
        {{"default-minimize", {{100, 0}, {75, 25}, {50, 50}, {25, 75}, {0, 100}}}}});
   result.profiles.global_actions.emplace(
-      "minimize", actions::ActionDefinition::keyboard("ALT+SPACE,N"));
+      "minimize",
+      actions::ActionDefinition{actions::ActionDefinition::current_version,
+                                actions::ActionType::window,
+                                actions::WindowParameters{actions::WindowOperation::minimize,
+                                                          actions::WindowTarget::gesture_window}});
   result.gestures.gestures.push_back(
       {"maximize",
        "Maximize",
        true,
        {{"default-maximize", {{0, 100}, {25, 75}, {50, 50}, {75, 25}, {100, 0}}}}});
   result.profiles.global_actions.emplace(
-      "maximize", actions::ActionDefinition::keyboard("WIN+UP"));
+      "maximize",
+      actions::ActionDefinition{actions::ActionDefinition::current_version,
+                                actions::ActionType::window,
+                                actions::WindowParameters{actions::WindowOperation::maximize,
+                                                          actions::WindowTarget::gesture_window}});
   return result;
 }
 

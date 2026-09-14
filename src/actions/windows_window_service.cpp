@@ -80,16 +80,35 @@ ActionResult WindowsWindowService::perform(WindowOperation operation, std::uintp
     case WindowOperation::move:
     case WindowOperation::resize:
     case WindowOperation::move_resize: {
-      const auto current = bounds(window);
-      if (!current)
-        return ActionResult::failed(ActionError::invalid_runtime_target, "window_not_found",
-                                    "The target window no longer exists.");
-      const int x = parameters.x.value_or(current->left);
-      const int y = parameters.y.value_or(current->top);
-      const int width = parameters.width.value_or(current->width);
-      const int height = parameters.height.value_or(current->height);
-      return ::SetWindowPos(handle, nullptr, x, y, width, height,
-                            SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER)
+      const bool moves = operation == WindowOperation::move ||
+                         operation == WindowOperation::move_resize;
+      const bool resizes = operation == WindowOperation::resize ||
+                           operation == WindowOperation::move_resize;
+      if ((moves && (!parameters.x || !parameters.y)) ||
+          (resizes && (!parameters.width || !parameters.height))) {
+        return ActionResult::failed(ActionError::invalid_definition, "incomplete_window_bounds",
+                                    "The window operation is missing required bounds.");
+      }
+      UINT flags = SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER;
+      int x = 0;
+      int y = 0;
+      int width = 0;
+      int height = 0;
+      if (operation == WindowOperation::move) {
+        x = *parameters.x;
+        y = *parameters.y;
+        flags |= SWP_NOSIZE;
+      } else if (operation == WindowOperation::resize) {
+        width = *parameters.width;
+        height = *parameters.height;
+        flags |= SWP_NOMOVE;
+      } else {
+        x = *parameters.x;
+        y = *parameters.y;
+        width = *parameters.width;
+        height = *parameters.height;
+      }
+      return ::SetWindowPos(handle, nullptr, x, y, width, height, flags)
                  ? ActionResult::succeeded()
                  : failed("window_bounds_failed", "Windows rejected the window bounds change.");
     }

@@ -6,6 +6,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Added `CODE_REVIEW_PHASE_2_V1.md`, a review of `src/` and `tests/` against `PHASE_2_SPEC.md`,
+  `PHASE_2_SPEC.feature`, and `TODO.md`.
+- Added mouse-over tooltips to the simple and advanced Settings labels, using the same descriptions
+  as the unchanged Help dialog.
+
+### Changed
+
+- Renamed the application executable from `GestureEngine.exe` to `StrokesPlusPlus.exe`.
+- Reorganized general settings, gesture editing, application profiles, and help into separate tabs.
+- Added a scaled picture of the selected gesture's stored stroke to the Gestures tab, including a
+  preview-only arrowhead that indicates direction without changing the gesture data.
+- Made Advanced settings a collapsed-by-default caret section on the Settings tab.
+- Renamed the Settings navigation tabs to Options, Global Actions, and Applications, and aligned
+  the Help tab terminology with those names.
+- Added a read-only Gestures inventory tab that displays every pattern, grouped into blue Activated
+  and gray Not Activated galleries independently of action assignments.
+- Styled the Help tab with bold section headings, divider lines, aligned label-and-description
+  columns, and alternating row shading.
+- Recorded two Phase 2 follow-up decisions from that review: action results are delivered
+  asynchronously so the gesture worker never waits for an action to finish, and virtual-desktop
+  support is detected at runtime instead of assumed.
+- Unchecked the `TODO.md` items that were marked complete without a corresponding implementation:
+  the action executor queue, the Create Desktop and Close Desktop reliability investigation and its
+  conditional implementation, explicit unsupported-operation reporting, hiding unsupported
+  operations from the Settings choices, gesture identity in the action log record, and the
+  acceptance test for non-blocking hook-path execution. The newly decided work was added as
+  unchecked items.
+- Corrected the README's window action schema, which described `x`, `y`, `width`, and `height` as
+  required for every move, resize, and move-resize action.
+- Documented in the README that virtual desktop actions currently report success without confirming
+  the operation, and that actions execute on their own worker while the engine waits for each one.
+- Made window move and resize operations ignore fields belonging to other operations, defaulted
+  omitted mouse positions to `current_cursor`, resolved that cursor position when the action runs,
+  and changed fresh minimize/maximize mappings to native window actions.
+
+### Fixed
+
+- Included gesture identity in action execution records and added regression coverage for the
+  documented mouse-action defaults and move/resize preservation guarantees.
+- Prevented DPI rescaling from collapsing Settings and action-editor dropdown lists to the height
+  of their closed selection field.
+- Kept the Match Value process dropdown responsive by excluding background-only processes and
+  batching allocation and redraw while its visible-application suggestions are populated.
+
 ## [0.8.0] - 2026-09-12
 
 ### Added

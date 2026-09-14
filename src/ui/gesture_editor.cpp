@@ -1,7 +1,11 @@
 #include "ui/gesture_editor.h"
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "actions/keyboard_shortcut.h"
 #include "gestures/gesture_repository.h"
@@ -11,6 +15,9 @@
 #include "ui/windows_action_editor.h"
 
 namespace strokes::ui {
+namespace {
+constexpr wchar_t preview_class[] = L"StrokesPlusPlusGesturePreview";
+}
 
 using detail::control;
 using detail::read_utf8;
@@ -18,20 +25,142 @@ using detail::text;
 using detail::wide;
 
 void GestureEditor::create() {
-  text(window_, 0, L"Selected gesture global action", 20, 380);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, shortcut_id, 230, 376, 110, 24);
-  control(window_, L"BUTTON", L"Configure", BS_PUSHBUTTON, global_assign_id, 344, 376, 60, 24);
-  text(window_, 0, L"Gestures", 410, 12);
-  control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, gestures_id, 400, 38, 220, 150);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, gesture_name_id, 400, 194, 220, 24);
-  control(window_, L"BUTTON", L"Add", BS_PUSHBUTTON, gesture_add_id, 400, 224, 50, 26);
-  control(window_, L"BUTTON", L"Rename", BS_PUSHBUTTON, gesture_rename_id, 454, 224, 62, 26);
-  control(window_, L"BUTTON", L"Delete", BS_PUSHBUTTON, gesture_delete_id, 520, 224, 50, 26);
-  control(window_, L"BUTTON", L"Train", BS_PUSHBUTTON, gesture_train_id, 574, 224, 50, 26);
-  control(window_, L"BUTTON", L"Remove last sample", BS_PUSHBUTTON, gesture_remove_sample_id, 400,
-          254, 96, 26);
-  control(window_, L"BUTTON", L"Enable / Disable", BS_PUSHBUTTON, gesture_toggle_id, 500, 254, 124,
+  text(window_, gesture_section_label_id, L"Gestures", 25, 50, 280);
+  control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, gestures_id, 25, 75, 280, 300);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, gesture_name_id, 325, 75, 300, 24);
+  control(window_, L"BUTTON", L"Add", BS_PUSHBUTTON, gesture_add_id, 325, 107, 50, 26);
+  control(window_, L"BUTTON", L"Rename", BS_PUSHBUTTON, gesture_rename_id, 379, 107, 62, 26);
+  control(window_, L"BUTTON", L"Delete", BS_PUSHBUTTON, gesture_delete_id, 445, 107, 50, 26);
+  control(window_, L"BUTTON", L"Train", BS_PUSHBUTTON, gesture_train_id, 499, 107, 50, 26);
+  control(window_, L"BUTTON", L"Remove last sample", BS_PUSHBUTTON, gesture_remove_sample_id, 325,
+          141, 112, 26);
+  control(window_, L"BUTTON", L"Enable / Disable", BS_PUSHBUTTON, gesture_toggle_id, 445, 141, 124,
           26);
+  text(window_, global_action_label_id, L"Selected gesture global action", 325, 193, 260);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, shortcut_id, 325, 218, 220, 24);
+  control(window_, L"BUTTON", L"Configure", BS_PUSHBUTTON, global_assign_id, 553, 218, 72, 24);
+  WNDCLASSEXW preview_window{sizeof(preview_window)};
+  preview_window.lpfnWndProc = preview_proc;
+  preview_window.hInstance = instance_;
+  preview_window.lpszClassName = preview_class;
+  preview_window.hCursor = ::LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
+  preview_window.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+  const ATOM registered = ::RegisterClassExW(&preview_window);
+  if (registered != 0 || ::GetLastError() == ERROR_CLASS_ALREADY_EXISTS) {
+    preview_ = ::CreateWindowExW(
+        WS_EX_CLIENTEDGE, preview_class, L"", WS_CHILD | WS_VISIBLE, 325, 265, 300, 340, window_,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(gesture_preview_id)), instance_, this);
+  }
+}
+
+void GestureEditor::set_visible(bool visible) const noexcept {
+  for (const int id : {gesture_section_label_id, global_action_label_id, shortcut_id, gestures_id,
+                       gesture_name_id, gesture_add_id, gesture_rename_id, gesture_delete_id,
+                       gesture_train_id, gesture_remove_sample_id, gesture_toggle_id,
+                       global_assign_id})
+    ::ShowWindow(::GetDlgItem(window_, id), visible ? SW_SHOW : SW_HIDE);
+  ::ShowWindow(preview_, visible ? SW_SHOW : SW_HIDE);
+}
+
+LRESULT CALLBACK GestureEditor::preview_proc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
+  auto* self = reinterpret_cast<GestureEditor*>(::GetWindowLongPtrW(window, GWLP_USERDATA));
+  if (message == WM_NCCREATE) {
+    self = static_cast<GestureEditor*>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams);
+    ::SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+  }
+  if (message == WM_PAINT && self) {
+    PAINTSTRUCT paint{};
+    HDC target = ::BeginPaint(window, &paint);
+    self->paint_preview(window, target);
+    ::EndPaint(window, &paint);
+    return 0;
+  }
+  if (message == WM_ERASEBKGND) return 1;
+  return ::DefWindowProcW(window, message, wp, lp);
+}
+
+void GestureEditor::paint_preview(HWND preview, HDC target) const noexcept {
+  RECT client{};
+  ::GetClientRect(preview, &client);
+  ::FillRect(target, &client, reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1));
+  const int chosen = index();
+  if (chosen < 0 || static_cast<std::size_t>(chosen) >= configuration_->gestures.gestures.size())
+    return;
+  const auto& templates =
+      configuration_->gestures.gestures[static_cast<std::size_t>(chosen)].templates;
+  if (templates.empty() || templates.front().points.empty()) return;
+  const auto& stroke = templates.front().points;
+  double left = std::numeric_limits<double>::max();
+  double top = std::numeric_limits<double>::max();
+  double right = std::numeric_limits<double>::lowest();
+  double bottom = std::numeric_limits<double>::lowest();
+  for (const auto& point : stroke) {
+    left = std::min(left, point.x);
+    top = std::min(top, point.y);
+    right = std::max(right, point.x);
+    bottom = std::max(bottom, point.y);
+  }
+  constexpr double padding = 24.0;
+  const double width = right - left;
+  const double height = bottom - top;
+  const double available_width = std::max(1.0, client.right - client.left - padding * 2.0);
+  const double available_height = std::max(1.0, client.bottom - client.top - padding * 2.0);
+  const double x_scale = width > 0.0 ? available_width / width : available_width;
+  const double y_scale = height > 0.0 ? available_height / height : available_height;
+  const double scale = std::min(x_scale, y_scale);
+  const double drawn_width = width * scale;
+  const double drawn_height = height * scale;
+  const double x_offset = (client.right - drawn_width) / 2.0;
+  const double y_offset = (client.bottom - drawn_height) / 2.0;
+  std::vector<POINT> points;
+  points.reserve(stroke.size());
+  for (const auto& point : stroke) {
+    points.push_back({static_cast<LONG>(std::lround(x_offset + (point.x - left) * scale)),
+                      static_cast<LONG>(std::lround(y_offset + (point.y - top) * scale))});
+  }
+  const int pen_width = std::max(2, ::MulDiv(4, static_cast<int>(::GetDpiForWindow(preview)), 96));
+  HPEN pen = ::CreatePen(PS_SOLID, pen_width, RGB(0, 160, 220));
+  HGDIOBJ previous = ::SelectObject(target, pen);
+  if (points.size() == 1) {
+    ::Ellipse(target, points[0].x - pen_width, points[0].y - pen_width,
+              points[0].x + pen_width + 1, points[0].y + pen_width + 1);
+  } else {
+    (void)::Polyline(target, points.data(), static_cast<int>(points.size()));
+    const POINT tip = points.back();
+    auto previous_point = points.end() - 2;
+    while (previous_point != points.begin() && previous_point->x == tip.x &&
+           previous_point->y == tip.y)
+      --previous_point;
+    const double direction_x = static_cast<double>(tip.x - previous_point->x);
+    const double direction_y = static_cast<double>(tip.y - previous_point->y);
+    const double direction_length = std::hypot(direction_x, direction_y);
+    if (direction_length > 0.0) {
+      const double unit_x = direction_x / direction_length;
+      const double unit_y = direction_y / direction_length;
+      const double arrow_length = static_cast<double>(
+          std::max(14, ::MulDiv(22, static_cast<int>(::GetDpiForWindow(preview)), 96)));
+      const double arrow_half_width = arrow_length * 0.55;
+      const double base_x = tip.x - unit_x * arrow_length;
+      const double base_y = tip.y - unit_y * arrow_length;
+      POINT arrow[] = {
+          tip,
+          {static_cast<LONG>(std::lround(base_x - unit_y * arrow_half_width)),
+           static_cast<LONG>(std::lround(base_y + unit_x * arrow_half_width))},
+          {static_cast<LONG>(std::lround(base_x + unit_y * arrow_half_width)),
+           static_cast<LONG>(std::lround(base_y - unit_x * arrow_half_width))}};
+      HBRUSH brush = ::CreateSolidBrush(RGB(0, 160, 220));
+      HGDIOBJ previous_brush = ::SelectObject(target, brush);
+      (void)::Polygon(target, arrow, 3);
+      ::SelectObject(target, previous_brush);
+      ::DeleteObject(brush);
+    }
+  }
+  ::SelectObject(target, previous);
+  ::DeleteObject(pen);
+}
+
+void GestureEditor::refresh_preview() const noexcept {
+  if (preview_) ::InvalidateRect(preview_, nullptr, TRUE);
 }
 
 bool GestureEditor::handle(int command, int notification) {
@@ -90,11 +219,15 @@ void GestureEditor::refresh() {
     ::SendDlgItemMessageW(window_, gestures_id, LB_ADDSTRING, 0,
                           reinterpret_cast<LPARAM>(label.c_str()));
   }
+  refresh_preview();
 }
 
 void GestureEditor::load() {
   const int chosen = index();
-  if (chosen < 0) return;
+  if (chosen < 0) {
+    refresh_preview();
+    return;
+  }
   const auto& gesture = configuration_->gestures.gestures[static_cast<std::size_t>(chosen)];
   ::SetDlgItemTextW(window_, gesture_name_id, wide(gesture.name).c_str());
   auto action = configuration_->profiles.global_actions.find(gesture.id);
@@ -107,6 +240,7 @@ void GestureEditor::load() {
   ::SendDlgItemMessageW(window_, shortcut_id, EM_SETREADONLY, TRUE, 0);
   ::EnableWindow(::GetDlgItem(window_, shortcut_id), TRUE);
   ::EnableWindow(::GetDlgItem(window_, global_assign_id), TRUE);
+  refresh_preview();
 }
 
 void GestureEditor::add() {
@@ -142,6 +276,7 @@ void GestureEditor::rename() {
     ::MessageBoxW(window_, L"Enter a unique gesture name.", L"Strokes++", MB_OK | MB_ICONERROR);
   refresh();
   ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, chosen, 0);
+  load();
 }
 
 void GestureEditor::erase() {
@@ -156,6 +291,12 @@ void GestureEditor::erase() {
   configuration_->profiles.global_actions.erase(id);
   for (auto& profile : configuration_->profiles.profiles) profile.actions_by_gesture.erase(id);
   refresh();
+  if (!configuration_->gestures.gestures.empty()) {
+    const int next = std::min(chosen,
+                              static_cast<int>(configuration_->gestures.gestures.size()) - 1);
+    ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, next, 0);
+    load();
+  }
 }
 
 void GestureEditor::train() {
@@ -174,6 +315,7 @@ void GestureEditor::train() {
     (void)repository.set_enabled(definition.id, true);
   refresh();
   ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, chosen, 0);
+  load();
 }
 
 void GestureEditor::drop_sample() {
@@ -185,6 +327,7 @@ void GestureEditor::drop_sample() {
   (void)repository.remove_template(gesture.id, gesture.templates.back().id);
   refresh();
   ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, chosen, 0);
+  load();
 }
 
 void GestureEditor::toggle() {
@@ -200,6 +343,7 @@ void GestureEditor::toggle() {
   }
   refresh();
   ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, chosen, 0);
+  load();
 }
 
 void GestureEditor::assign() {

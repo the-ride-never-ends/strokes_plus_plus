@@ -18,6 +18,7 @@ class ProfileEditor {
       : window_(window), instance_(instance), configuration_(&configuration) {}
 
   void create();
+  void set_visible(bool visible) const noexcept;
   void refresh();
   /// Fills the profile fields, including the override for one gesture.
   ///

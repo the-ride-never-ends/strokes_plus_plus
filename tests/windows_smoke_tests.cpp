@@ -1,4 +1,5 @@
 #include <Windows.h>
+#include <CommCtrl.h>
 
 #include <array>
 #include <atomic>
@@ -30,6 +31,15 @@ namespace {
 using strokes::tests::check;
 bool pass_mouse(const strokes::input::MouseInputEvent&, void*) noexcept { return false; }
 bool pass_escape(void*) noexcept { return false; }
+bool combo_exposes(HWND window, int id, LRESULT choices) {
+  HWND combo = ::GetDlgItem(window, id);
+  RECT dropped{};
+  const LRESULT item_height = ::SendMessageW(combo, CB_GETITEMHEIGHT, 0, 0);
+  return combo != nullptr && ::SendMessageW(combo, CB_GETCOUNT, 0, 0) == choices &&
+         ::SendMessageW(combo, CB_GETDROPPEDCONTROLRECT, 0,
+                        reinterpret_cast<LPARAM>(&dropped)) != CB_ERR &&
+         dropped.bottom - dropped.top >= item_height * 2;
+}
 struct ChildBoundsCheck {
   HWND parent{};
   RECT client{};
@@ -202,9 +212,8 @@ int main() {
   }
   check(action_window != nullptr && ::IsWindowVisible(action_window),
         "generic action editor creates a visible modal window");
-  check(action_window != nullptr &&
-            ::SendDlgItemMessageW(action_window, 5001, CB_GETCOUNT, 0, 0) == 8,
-        "action editor exposes every supported action type");
+  check(action_window != nullptr && combo_exposes(action_window, 5001, 8),
+        "action editor exposes every supported action type in its expanded dropdown");
   check(action_window != nullptr &&
             (::GetWindowLongPtrW(::GetDlgItem(action_window, 5001), GWL_STYLE) & WS_TABSTOP) != 0 &&
             (::GetWindowLongPtrW(::GetDlgItem(action_window, 5019), GWL_STYLE) & BS_DEFPUSHBUTTON) != 0,
@@ -222,18 +231,28 @@ int main() {
           "window service restores a maximized target");
     check(window_service.perform(actions::WindowOperation::activate, handle, {}).success,
           "window service activates a live target");
+    const auto before_move = window_service.bounds(handle);
     check(window_service
               .perform(actions::WindowOperation::move, handle,
                        {actions::WindowOperation::move, actions::WindowTarget::gesture_window,
-                        80, 80, {}, {}})
+                        80, 80, 1, 1})
               .success,
           "window service moves a live target");
+    const auto after_move = window_service.bounds(handle);
+    check(before_move && after_move && after_move->width == before_move->width &&
+              after_move->height == before_move->height,
+          "move ignores stored dimensions and preserves the existing size");
+    const auto before_resize = window_service.bounds(handle);
     check(window_service
               .perform(actions::WindowOperation::resize, handle,
                        {actions::WindowOperation::resize, actions::WindowTarget::gesture_window,
-                        {}, {}, 760, 660})
+                        -500, -500, 760, 660})
               .success,
           "window service resizes a live target");
+    const auto after_resize = window_service.bounds(handle);
+    check(before_resize && after_resize && after_resize->left == before_resize->left &&
+              after_resize->top == before_resize->top,
+          "resize ignores stored coordinates and preserves the existing origin");
     check(window_service
               .perform(actions::WindowOperation::move_resize, handle,
                        {actions::WindowOperation::move_resize,
@@ -282,6 +301,47 @@ int main() {
   }
   check(settings_window != nullptr && ::IsWindowVisible(settings_window),
         "settings command creates a visible top-level window");
+  HWND editor_tabs = ::GetDlgItem(settings_window, ui::editor_tabs_id);
+  check(editor_tabs != nullptr && ::SendMessageW(editor_tabs, TCM_GETITEMCOUNT, 0, 0) == 5 &&
+            ::IsWindowVisible(::GetDlgItem(settings_window, ui::enabled_id)) &&
+            !::IsWindowVisible(::GetDlgItem(settings_window, ui::gestures_id)) &&
+            !::IsWindowVisible(::GetDlgItem(settings_window, ui::profiles_id)),
+        "settings opens on a separate Options tab");
+  (void)::SendMessageW(editor_tabs, TCM_SETCURSEL, 1, 0);
+  NMHDR tab_change{editor_tabs, static_cast<UINT_PTR>(ui::editor_tabs_id), TCN_SELCHANGE};
+  (void)::SendMessageW(settings_window, WM_NOTIFY, ui::editor_tabs_id,
+                       reinterpret_cast<LPARAM>(&tab_change));
+  check(!::IsWindowVisible(::GetDlgItem(settings_window, ui::enabled_id)) &&
+            ::IsWindowVisible(::GetDlgItem(settings_window, ui::gestures_id)) &&
+            !::IsWindowVisible(::GetDlgItem(settings_window, ui::profiles_id)) &&
+            ::IsWindowVisible(::GetDlgItem(settings_window, ui::gesture_preview_id)),
+        "selecting Global Actions hides options and shows the gesture editor and gesture preview");
+  (void)::SendMessageW(editor_tabs, TCM_SETCURSEL, 2, 0);
+  (void)::SendMessageW(settings_window, WM_NOTIFY, ui::editor_tabs_id,
+                       reinterpret_cast<LPARAM>(&tab_change));
+  check(!::IsWindowVisible(::GetDlgItem(settings_window, ui::enabled_id)) &&
+            !::IsWindowVisible(::GetDlgItem(settings_window, ui::gestures_id)) &&
+            ::IsWindowVisible(::GetDlgItem(settings_window, ui::profiles_id)) &&
+            ::IsWindowVisible(::GetDlgItem(settings_window, ui::profile_criteria_id)) &&
+            !::IsWindowVisible(::GetDlgItem(settings_window, ui::gesture_preview_id)),
+        "selecting Applications hides global-action controls and shows the profile editor");
+  (void)::SendMessageW(editor_tabs, TCM_SETCURSEL, 3, 0);
+  (void)::SendMessageW(settings_window, WM_NOTIFY, ui::editor_tabs_id,
+                       reinterpret_cast<LPARAM>(&tab_change));
+  check(::IsWindowVisible(::GetDlgItem(settings_window, ui::gesture_inventory_id)) &&
+            !::IsWindowVisible(::GetDlgItem(settings_window, ui::gestures_id)) &&
+            !::IsWindowVisible(::GetDlgItem(settings_window, ui::profiles_id)),
+        "selecting Gestures shows the independent gesture inventory");
+  (void)::SendMessageW(editor_tabs, TCM_SETCURSEL, 4, 0);
+  (void)::SendMessageW(settings_window, WM_NOTIFY, ui::editor_tabs_id,
+                       reinterpret_cast<LPARAM>(&tab_change));
+  HWND help_text = ::GetDlgItem(settings_window, ui::help_text_id);
+  check(help_text != nullptr && ::IsWindowVisible(help_text) &&
+            (::GetWindowLongPtrW(help_text, GWL_STYLE) & ES_READONLY) != 0 &&
+            ::GetWindowTextLengthW(help_text) > 500,
+        "selecting Help shows the complete explanation in a read-only tab");
+  check(settings_window != nullptr && combo_exposes(settings_window, ui::button_id, 4),
+        "activation-button dropdown expands to expose all configured choices");
   actions::WindowsWindowService window_service;
   const auto invalid_window = window_service.perform(
       actions::WindowOperation::maximize, 0x1,
@@ -296,6 +356,9 @@ int main() {
   check(monitor && !monitor->identifier.empty() && monitor->bounds.width > 0 &&
             monitor->work_area.height > 0,
         "window service exposes monitor identity, bounds, and work area");
+  (void)::SendMessageW(editor_tabs, TCM_SETCURSEL, 0, 0);
+  (void)::SendMessageW(settings_window, WM_NOTIFY, ui::editor_tabs_id,
+                       reinterpret_cast<LPARAM>(&tab_change));
   ChildBoundsCheck bounds{settings_window};
   if (settings_window != nullptr) {
     ::GetClientRect(settings_window, &bounds.client);
@@ -303,23 +366,26 @@ int main() {
   }
   check(settings_window != nullptr && bounds.contained,
         "every visible settings control fits inside the client area");
+  HWND advanced_toggle = ::GetDlgItem(settings_window, ui::advanced_section_label_id);
   check(settings_window != nullptr &&
             ::FindWindowExW(settings_window, nullptr, L"STATIC", L"Simple settings") != nullptr &&
-            ::FindWindowExW(settings_window, nullptr, L"STATIC", L"Advanced settings") != nullptr,
-        "settings visibly separates simple controls from implementation-level advanced controls");
-  check(settings_window != nullptr && ::GetDlgItem(settings_window, ui::help_id) != nullptr,
-        "settings window contains a Help button");
-  if (settings_window != nullptr)
-    ::PostMessageW(settings_window, WM_COMMAND, MAKEWPARAM(ui::help_id, BN_CLICKED), 0);
-  HWND help_window = nullptr;
-  for (int attempt = 0; attempt < 100; ++attempt) {
-    help_window = ::FindWindowW(L"#32770", L"Strokes++ Settings Help");
-    if (help_window != nullptr && ::IsWindowVisible(help_window)) break;
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
-  check(help_window != nullptr && ::IsWindowVisible(help_window),
-        "Help button opens a visible settings explanation dialog");
-  if (help_window != nullptr) ::PostMessageW(help_window, WM_CLOSE, 0, 0);
+            advanced_toggle != nullptr && !::IsWindowVisible(::GetDlgItem(settings_window, ui::move_id)),
+        "settings collapses implementation-level advanced controls behind a caret by default");
+  if (advanced_toggle != nullptr)
+    ::SendMessageW(settings_window, WM_COMMAND,
+                   MAKEWPARAM(ui::advanced_section_label_id, BN_CLICKED),
+                   reinterpret_cast<LPARAM>(advanced_toggle));
+  check(::IsWindowVisible(::GetDlgItem(settings_window, ui::move_id)) &&
+            ::IsWindowVisible(::GetDlgItem(settings_window, ui::threshold_id)),
+        "advanced-settings caret expands the advanced controls");
+  const auto tooltip = reinterpret_cast<HWND>(
+      ::GetPropW(settings_window, L"StrokesPlusPlus.SettingsTooltip"));
+  check(tooltip != nullptr, "settings creates its mouse-over tooltip control");
+  const LRESULT tooltip_count =
+      tooltip != nullptr ? ::SendMessageW(tooltip, TTM_GETTOOLCOUNT, 0, 0) : 0;
+  check(tooltip_count >= 9,
+        "settings labels register their help descriptions as mouse-over tooltips (count " +
+            std::to_string(tooltip_count) + ")");
   if (settings_window != nullptr) ::PostMessageW(settings_window, WM_CLOSE, 0, 0);
   settings_thread.join();
   check(settings_returned.load(std::memory_order_acquire),

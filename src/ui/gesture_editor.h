@@ -17,6 +17,7 @@ class GestureEditor {
       : window_(window), instance_(instance), configuration_(&configuration) {}
 
   void create();
+  void set_visible(bool visible) const noexcept;
   void refresh();
   /// Fills the name and shortcut fields from the selected gesture.
   void load();
@@ -33,6 +34,9 @@ class GestureEditor {
   [[nodiscard]] bool save(config::ConfigurationBundle& target) const;
 
  private:
+  static LRESULT CALLBACK preview_proc(HWND, UINT, WPARAM, LPARAM);
+  void paint_preview(HWND preview, HDC target) const noexcept;
+  void refresh_preview() const noexcept;
   void add();
   void rename();
   void erase();
@@ -45,6 +49,7 @@ class GestureEditor {
   HWND window_;
   HINSTANCE instance_;
   config::ConfigurationBundle* configuration_;
+  HWND preview_{};
 };
 
 }  // namespace strokes::ui

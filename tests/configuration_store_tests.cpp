@@ -38,15 +38,20 @@ void creation_and_persistence() {
   check(loaded.value->gestures.gestures.size() == 3 &&
             loaded.value->gestures.gestures[1].id == "minimize" &&
             loaded.value->gestures.gestures[2].id == "maximize" &&
-            *actions::keyboard_shortcut(loaded.value->profiles.global_actions.at("minimize")) ==
-                "ALT+SPACE,N" &&
-            *actions::keyboard_shortcut(loaded.value->profiles.global_actions.at("maximize")) ==
-                "WIN+UP",
-        "defaults include editable diagonal minimize and maximize gestures");
+            loaded.value->profiles.global_actions.at("minimize").type ==
+                actions::ActionType::window &&
+            std::get<actions::WindowParameters>(
+                loaded.value->profiles.global_actions.at("minimize").parameters)
+                    .operation == actions::WindowOperation::minimize &&
+            std::get<actions::WindowParameters>(
+                loaded.value->profiles.global_actions.at("maximize").parameters)
+                    .operation == actions::WindowOperation::maximize,
+        "defaults include native diagonal minimize and maximize window actions");
   loaded.value->global.gestures_enabled = false;
   loaded.value->global.movement_threshold = 17;
   *actions::keyboard_shortcut(loaded.value->profiles.global_actions.at("right")) = "CTRL+W";
-  *actions::keyboard_shortcut(loaded.value->profiles.global_actions.at("minimize")) = "ALT+F9";
+  loaded.value->profiles.global_actions.at("minimize") =
+      actions::ActionDefinition::keyboard("ALT+F9");
   const actions::ActionDefinition process_action{
       1, actions::ActionType::process,
       actions::ProcessParameters{actions::ProcessOperation::launch, "tool.exe", "--flag",
