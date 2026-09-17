@@ -6,12 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Global Actions UI refresh
+
+- Reworked Global Actions around an assigned-action list, gesture selector, gesture-management
+  commands, live gesture preview, and explicit add/edit/delete action controls modeled after the
+  classic StrokesPlus.net layout.
+- Kept the current one-global-action-per-gesture backend for this iteration. Named reusable action
+  records, mouse-modifier conditions, keyboard-modifier conditions, and Lua scripting remain
+  deferred and are intentionally not exposed as nonfunctional controls.
+- Replaced generic action labels such as `keyboard.shortcut` with parameter-aware summaries across
+  Global Actions and Applications, including actual key sequences, targets, paths, URIs, positions,
+  dimensions, and configured amounts.
+- Changed the Global Actions list to concise semantic labels such as Minimize, Maximize, Copy, or
+  Launch Program while retaining the exact shortcut or parameter summary in Assigned action.
+- Added non-destructive default assignments for all 30 activated built-in gestures, covering common
+  navigation, editing, window, Explorer, Task Manager, media, mute, and volume actions. Existing
+  customized mappings are preserved and only missing defaults are added during migration.
+
 ### Added
 
 - Added `CODE_REVIEW_PHASE_2_V1.md`, a review of `src/` and `tests/` against `PHASE_2_SPEC.md`,
   `PHASE_2_SPEC.feature`, and `TODO.md`.
 - Added mouse-over tooltips to the simple and advanced Settings labels, using the same descriptions
   as the unchanged Help dialog.
+- Added the complete 36-pattern direction-named gesture catalog from StrokesPlus.net, with 30
+  patterns activated and 6 inactive independently of action assignment.
 
 ### Changed
 
@@ -22,6 +41,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Made Advanced settings a collapsed-by-default caret section on the Settings tab.
 - Renamed the Settings navigation tabs to Options, Global Actions, and Applications, and aligned
   the Help tab terminology with those names.
+- Expanded Help to explain direction-based gesture names, catalog activation, preview arrows, and
+  the separation between gesture patterns and action assignments.
+- Replaced ambiguous slash and backslash gesture labels with explicit diagonal directions such as
+  `Diagonal Down-Left` and `Diagonal Up-Right`.
 - Added a read-only Gestures inventory tab that displays every pattern, grouped into blue Activated
   and gray Not Activated galleries independently of action assignments.
 - Styled the Help tab with bold section headings, divider lines, aligned label-and-description

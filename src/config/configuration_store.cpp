@@ -1,9 +1,11 @@
 #include "config/configuration_store.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 #include <utility>
 
 #include "config/configuration_codec.h"
@@ -306,6 +308,189 @@ void append_warning(std::string& warnings, const std::string& warning) {
   warnings += warning;
 }
 
+gestures::Stroke cardinal_stroke(std::string_view directions) {
+  gestures::Stroke result{{0.0, 0.0}};
+  for (const char direction : directions) {
+    auto next = result.back();
+    switch (direction) {
+      case 'D': next.y += 100.0; break;
+      case 'L': next.x -= 100.0; break;
+      case 'R': next.x += 100.0; break;
+      case 'U': next.y -= 100.0; break;
+      default: continue;
+    }
+    result.push_back(next);
+  }
+  return result;
+}
+
+gestures::GestureDefinition built_in(std::string id, std::string name, bool enabled,
+                                     gestures::Stroke points) {
+  const std::string template_id = "built-in-" + id;
+  return {std::move(id), std::move(name), enabled, {{template_id, std::move(points)}}};
+}
+
+std::vector<gestures::GestureDefinition> built_in_gestures() {
+  std::vector<gestures::GestureDefinition> result;
+  const auto add_cardinal = [&](const char* id, const char* name, bool enabled,
+                                std::string_view directions) {
+    result.push_back(built_in(id, name, enabled, cardinal_stroke(directions)));
+  };
+  result.push_back(
+      built_in("slash-down", "Diagonal Down-Left", true, {{100, 0}, {50, 50}, {0, 100}}));
+  result.push_back(
+      built_in("slash-up", "Diagonal Up-Right", true, {{0, 100}, {50, 50}, {100, 0}}));
+  result.push_back(
+      built_in("backslash-down", "Diagonal Down-Right", true,
+               {{0, 0}, {50, 50}, {100, 100}}));
+  result.push_back(
+      built_in("backslash-up", "Diagonal Up-Left", true,
+               {{100, 100}, {50, 50}, {0, 0}}));
+  add_cardinal("down", "Down", true, "D");
+  add_cardinal("down-left", "Down Left", true, "DL");
+  add_cardinal("down-left-right", "Down Left Right", true, "DLR");
+  add_cardinal("down-right", "Down Right", true, "DR");
+  add_cardinal("down-right-up-left", "Down Right Up Left", true, "DRUL");
+  add_cardinal("down-up", "Down Up", true, "DU");
+  add_cardinal("down-up-down", "Down Up Down", true, "DUD");
+  add_cardinal("down-up-down-up", "Down Up Down Up", true, "DUDU");
+  add_cardinal("down-up-right-left", "Down Up Right Left", true, "DURL");
+  add_cardinal("left", "Left", true, "L");
+  add_cardinal("left-down", "Left Down", true, "LD");
+  add_cardinal("left-right", "Left Right", true, "LR");
+  add_cardinal("left-right-left", "Left Right Left", true, "LRL");
+  add_cardinal("left-up", "Left Up", true, "LU");
+  add_cardinal("right", "Right", true, "R");
+  add_cardinal("right-down", "Right Down", true, "RD");
+  add_cardinal("right-left", "Right Left", true, "RL");
+  add_cardinal("right-left-right", "Right Left Right", true, "RLR");
+  add_cardinal("right-left-right-left", "Right Left Right Left", true, "RLRL");
+  add_cardinal("right-up", "Right Up", true, "RU");
+  add_cardinal("up", "Up", true, "U");
+  add_cardinal("up-down", "Up Down", true, "UD");
+  add_cardinal("up-down-up", "Up Down Up", true, "UDU");
+  add_cardinal("up-down-up-down", "Up Down Up Down", true, "UDUD");
+  add_cardinal("up-left", "Up Left", true, "UL");
+  add_cardinal("up-right", "Up Right", true, "UR");
+  result.push_back(built_in("slash-up-down", "Diagonal Up-Right Down-Left", false,
+                            {{0, 100}, {50, 50}, {100, 0}, {50, 50}, {0, 100}}));
+  result.push_back(built_in("backslash-up-down", "Diagonal Up-Left Down-Right", false,
+                            {{100, 100}, {50, 50}, {0, 0}, {50, 50}, {100, 100}}));
+  result.push_back(built_in("down-slash-up", "Down Diagonal Up-Right", false,
+                            {{0, 0}, {0, 100}, {100, 0}}));
+  add_cardinal("down-right-left", "Down Right Left", false, "DRL");
+  add_cardinal("left-right-down", "Left Right Down", false, "LRD");
+  add_cardinal("up-right-left", "Up Right Left", false, "URL");
+  return result;
+}
+
+void remap_action_key(actions::ActionResolver::GlobalActions& actions, const std::string& old_id,
+                      const std::string& new_id) {
+  const auto found = actions.find(old_id);
+  if (found == actions.end()) return;
+  auto action = std::move(found->second);
+  actions.erase(found);
+  actions.insert_or_assign(new_id, std::move(action));
+}
+
+void migrate_gesture_catalog(ConfigurationBundle& configuration) {
+  if (configuration.gestures.version >= GestureFile::current_version) return;
+  const auto remap = [&](const std::string& old_id, const std::string& new_id,
+                         const std::string& new_name) {
+    const auto found = std::ranges::find(configuration.gestures.gestures, old_id,
+                                         &gestures::GestureDefinition::id);
+    if (found != configuration.gestures.gestures.end()) {
+      found->id = new_id;
+      found->name = new_name;
+    }
+    remap_action_key(configuration.profiles.global_actions, old_id, new_id);
+    for (auto& profile : configuration.profiles.profiles)
+      remap_action_key(profile.actions_by_gesture, old_id, new_id);
+  };
+  remap("minimize", "slash-down", "Diagonal Down-Left");
+  remap("maximize", "slash-up", "Diagonal Up-Right");
+  for (auto& gesture : built_in_gestures()) {
+    const auto found = std::ranges::find(configuration.gestures.gestures, gesture.id,
+                                         &gestures::GestureDefinition::id);
+    if (found == configuration.gestures.gestures.end()) {
+      configuration.gestures.gestures.push_back(std::move(gesture));
+    } else if (configuration.gestures.version < 3) {
+      const bool old_diagonal_label =
+          (found->id == "slash-down" && found->name == "/ Down") ||
+          (found->id == "slash-up" && found->name == "/ Up") ||
+          (found->id == "backslash-down" && found->name == "\\ Down") ||
+          (found->id == "backslash-up" && found->name == "\\ Up") ||
+          (found->id == "slash-up-down" && found->name == "/ Up Down") ||
+          (found->id == "backslash-up-down" && found->name == "\\ Up Down") ||
+          (found->id == "down-slash-up" && found->name == "Down / Up");
+      if (old_diagonal_label) found->name = gesture.name;
+    }
+  }
+  configuration.gestures.version = GestureFile::current_version;
+}
+
+actions::ActionDefinition window_action(actions::WindowOperation operation) {
+  return {actions::ActionDefinition::current_version, actions::ActionType::window,
+          actions::WindowParameters{operation, actions::WindowTarget::gesture_window}};
+}
+
+actions::ActionDefinition media_action(actions::MediaOperation operation) {
+  return {actions::ActionDefinition::current_version, actions::ActionType::media,
+          actions::MediaParameters{operation}};
+}
+
+actions::ActionDefinition volume_action(actions::VolumeOperation operation,
+                                        std::optional<double> amount = std::nullopt) {
+  return {actions::ActionDefinition::current_version, actions::ActionType::volume,
+          actions::VolumeParameters{operation, amount}};
+}
+
+void add_default_global_actions(actions::ActionResolver::GlobalActions& actions) {
+  const auto add = [&](const char* gesture, actions::ActionDefinition action) {
+    actions.emplace(gesture, std::move(action));
+  };
+  add("slash-down", window_action(actions::WindowOperation::minimize));
+  add("slash-up", window_action(actions::WindowOperation::maximize));
+  add("backslash-down", actions::ActionDefinition::keyboard("ALT+F4"));
+  add("backslash-up", window_action(actions::WindowOperation::restore));
+  add("down", actions::ActionDefinition::keyboard("PAGEDOWN"));
+  add("down-left", actions::ActionDefinition::keyboard("END"));
+  add("down-left-right", actions::ActionDefinition::keyboard("F5"));
+  add("down-right",
+      {actions::ActionDefinition::current_version, actions::ActionType::process,
+       actions::ProcessParameters{actions::ProcessOperation::launch, "explorer.exe", {}, {}}});
+  add("down-right-up-left", actions::ActionDefinition::keyboard("CTRL+A"));
+  add("down-up", volume_action(actions::VolumeOperation::mute_toggle));
+  add("down-up-down", volume_action(actions::VolumeOperation::decrease, 5.0));
+  add("down-up-down-up", volume_action(actions::VolumeOperation::increase, 5.0));
+  add("down-up-right-left", actions::ActionDefinition::keyboard("ESC"));
+  add("left", actions::ActionDefinition::keyboard("ALT+LEFT"));
+  add("left-down", actions::ActionDefinition::keyboard("DELETE"));
+  add("left-right", actions::ActionDefinition::keyboard("CTRL+C"));
+  add("left-right-left", actions::ActionDefinition::keyboard("CTRL+X"));
+  add("left-up", actions::ActionDefinition::keyboard("HOME"));
+  add("right", actions::ActionDefinition::keyboard("ALT+RIGHT"));
+  add("right-down", actions::ActionDefinition::keyboard("CTRL+V"));
+  add("right-left", actions::ActionDefinition::keyboard("CTRL+Z"));
+  add("right-left-right", actions::ActionDefinition::keyboard("CTRL+Y"));
+  add("right-left-right-left",
+      {actions::ActionDefinition::current_version, actions::ActionType::process,
+       actions::ProcessParameters{actions::ProcessOperation::launch, "taskmgr.exe", {}, {}}});
+  add("right-up", actions::ActionDefinition::keyboard("CTRL+N"));
+  add("up", actions::ActionDefinition::keyboard("PAGEUP"));
+  add("up-down", media_action(actions::MediaOperation::play_pause));
+  add("up-down-up", media_action(actions::MediaOperation::next_track));
+  add("up-down-up-down", media_action(actions::MediaOperation::previous_track));
+  add("up-left", actions::ActionDefinition::keyboard("CTRL+HOME"));
+  add("up-right", actions::ActionDefinition::keyboard("CTRL+END"));
+}
+
+void migrate_default_global_actions(ConfigurationBundle& configuration) {
+  if (configuration.profiles.version >= ProfileFile::current_version) return;
+  add_default_global_actions(configuration.profiles.global_actions);
+  configuration.profiles.version = ProfileFile::current_version;
+}
+
 bool quarantine(const std::filesystem::path& path, std::string& error) {
   auto invalid = path;
   invalid += ".invalid";
@@ -356,32 +541,8 @@ ConfigurationStore::ConfigurationStore(std::filesystem::path directory)
 
 ConfigurationBundle ConfigurationStore::defaults() {
   ConfigurationBundle result;
-  result.gestures.gestures.push_back(
-      {"right", "Right", true, {{"default-right", {{0, 0}, {30, 0}, {60, 0}, {100, 0}}}}});
-  result.profiles.global_actions.emplace(
-      "right", actions::ActionDefinition::keyboard("ALT+RIGHT"));
-  result.gestures.gestures.push_back(
-      {"minimize",
-       "Minimize",
-       true,
-       {{"default-minimize", {{100, 0}, {75, 25}, {50, 50}, {25, 75}, {0, 100}}}}});
-  result.profiles.global_actions.emplace(
-      "minimize",
-      actions::ActionDefinition{actions::ActionDefinition::current_version,
-                                actions::ActionType::window,
-                                actions::WindowParameters{actions::WindowOperation::minimize,
-                                                          actions::WindowTarget::gesture_window}});
-  result.gestures.gestures.push_back(
-      {"maximize",
-       "Maximize",
-       true,
-       {{"default-maximize", {{0, 100}, {25, 75}, {50, 50}, {75, 25}, {100, 0}}}}});
-  result.profiles.global_actions.emplace(
-      "maximize",
-      actions::ActionDefinition{actions::ActionDefinition::current_version,
-                                actions::ActionType::window,
-                                actions::WindowParameters{actions::WindowOperation::maximize,
-                                                          actions::WindowTarget::gesture_window}});
+  result.gestures.gestures = built_in_gestures();
+  add_default_global_actions(result.profiles.global_actions);
   return result;
 }
 
@@ -416,6 +577,8 @@ ConfigurationLoadResult ConfigurationStore::load() const {
                       error)) {
     return {{}, error};
   }
+  migrate_gesture_catalog(result);
+  migrate_default_global_actions(result);
   return {std::move(result), {}, std::move(warnings)};
 }
 

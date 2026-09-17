@@ -17,6 +17,7 @@
 namespace strokes::ui {
 namespace {
 constexpr wchar_t preview_class[] = L"StrokesPlusPlusGesturePreview";
+
 }
 
 using detail::control;
@@ -25,20 +26,23 @@ using detail::text;
 using detail::wide;
 
 void GestureEditor::create() {
-  text(window_, gesture_section_label_id, L"Gestures", 25, 50, 280);
-  control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, gestures_id, 25, 75, 280, 300);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, gesture_name_id, 325, 75, 300, 24);
-  control(window_, L"BUTTON", L"Add", BS_PUSHBUTTON, gesture_add_id, 325, 107, 50, 26);
-  control(window_, L"BUTTON", L"Rename", BS_PUSHBUTTON, gesture_rename_id, 379, 107, 62, 26);
-  control(window_, L"BUTTON", L"Delete", BS_PUSHBUTTON, gesture_delete_id, 445, 107, 50, 26);
-  control(window_, L"BUTTON", L"Train", BS_PUSHBUTTON, gesture_train_id, 499, 107, 50, 26);
-  control(window_, L"BUTTON", L"Remove last sample", BS_PUSHBUTTON, gesture_remove_sample_id, 325,
-          141, 112, 26);
-  control(window_, L"BUTTON", L"Enable / Disable", BS_PUSHBUTTON, gesture_toggle_id, 445, 141, 124,
+  text(window_, gesture_section_label_id, L"Global Actions", 25, 50, 230);
+  control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, gestures_id, 25, 75, 235, 430);
+  control(window_, L"BUTTON", L"Add / Edit Action", BS_PUSHBUTTON, global_assign_id, 25, 515, 112,
+          28);
+  control(window_, L"BUTTON", L"Delete Action", BS_PUSHBUTTON, global_remove_id, 145, 515, 115, 28);
+
+  text(window_, global_action_label_id, L"Gesture", 280, 50, 320);
+  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, gesture_select_id, 280, 75, 320, 300);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, gesture_name_id, 280, 107, 320, 24);
+  control(window_, L"BUTTON", L"New", BS_PUSHBUTTON, gesture_add_id, 280, 139, 52, 26);
+  control(window_, L"BUTTON", L"Rename", BS_PUSHBUTTON, gesture_rename_id, 338, 139, 62, 26);
+  control(window_, L"BUTTON", L"Delete", BS_PUSHBUTTON, gesture_delete_id, 406, 139, 58, 26);
+  control(window_, L"BUTTON", L"Train", BS_PUSHBUTTON, gesture_train_id, 470, 139, 54, 26);
+  control(window_, L"BUTTON", L"Enable / Disable", BS_PUSHBUTTON, gesture_toggle_id, 280, 171, 124,
           26);
-  text(window_, global_action_label_id, L"Selected gesture global action", 325, 193, 260);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, shortcut_id, 325, 218, 220, 24);
-  control(window_, L"BUTTON", L"Configure", BS_PUSHBUTTON, global_assign_id, 553, 218, 72, 24);
+  control(window_, L"BUTTON", L"Remove last sample", BS_PUSHBUTTON, gesture_remove_sample_id, 412,
+          171, 128, 26);
   WNDCLASSEXW preview_window{sizeof(preview_window)};
   preview_window.lpfnWndProc = preview_proc;
   preview_window.hInstance = instance_;
@@ -48,16 +52,19 @@ void GestureEditor::create() {
   const ATOM registered = ::RegisterClassExW(&preview_window);
   if (registered != 0 || ::GetLastError() == ERROR_CLASS_ALREADY_EXISTS) {
     preview_ = ::CreateWindowExW(
-        WS_EX_CLIENTEDGE, preview_class, L"", WS_CHILD | WS_VISIBLE, 325, 265, 300, 340, window_,
+        WS_EX_CLIENTEDGE, preview_class, L"", WS_CHILD | WS_VISIBLE, 280, 207, 320, 255, window_,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(gesture_preview_id)), instance_, this);
   }
+  text(window_, assigned_action_label_id, L"Assigned action", 280, 474, 150);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL | ES_READONLY, shortcut_id, 280, 497, 320, 24);
 }
 
 void GestureEditor::set_visible(bool visible) const noexcept {
-  for (const int id : {gesture_section_label_id, global_action_label_id, shortcut_id, gestures_id,
-                       gesture_name_id, gesture_add_id, gesture_rename_id, gesture_delete_id,
-                       gesture_train_id, gesture_remove_sample_id, gesture_toggle_id,
-                       global_assign_id})
+  for (const int id : {gesture_section_label_id, global_action_label_id, assigned_action_label_id,
+                       shortcut_id, gestures_id, gesture_select_id, gesture_name_id,
+                       gesture_add_id, gesture_rename_id, gesture_delete_id, gesture_train_id,
+                       gesture_remove_sample_id, gesture_toggle_id, global_assign_id,
+                       global_remove_id})
     ::ShowWindow(::GetDlgItem(window_, id), visible ? SW_SHOW : SW_HIDE);
   ::ShowWindow(preview_, visible ? SW_SHOW : SW_HIDE);
 }
@@ -192,7 +199,15 @@ bool GestureEditor::handle(int command, int notification) {
     assign();
     return true;
   }
+  if (command == global_remove_id) {
+    remove_action();
+    return true;
+  }
   if (command == gestures_id && notification == LBN_SELCHANGE) {
+    select_action();
+    return true;
+  }
+  if (command == gesture_select_id && notification == CBN_SELCHANGE) {
     load();
     return true;
   }
@@ -200,8 +215,8 @@ bool GestureEditor::handle(int command, int notification) {
 }
 
 int GestureEditor::index() const noexcept {
-  const LRESULT selected = ::SendDlgItemMessageW(window_, gestures_id, LB_GETCURSEL, 0, 0);
-  return selected == LB_ERR ? -1 : static_cast<int>(selected);
+  const LRESULT selected = ::SendDlgItemMessageW(window_, gesture_select_id, CB_GETCURSEL, 0, 0);
+  return selected == CB_ERR ? -1 : static_cast<int>(selected);
 }
 
 std::string GestureEditor::selected() const {
@@ -212,13 +227,22 @@ std::string GestureEditor::selected() const {
 
 void GestureEditor::refresh() {
   ::SendDlgItemMessageW(window_, gestures_id, LB_RESETCONTENT, 0, 0);
+  ::SendDlgItemMessageW(window_, gesture_select_id, CB_RESETCONTENT, 0, 0);
+  action_gesture_ids_.clear();
   for (const auto& gesture : configuration_->gestures.gestures) {
-    std::wstring label = wide(gesture.name);
-    label += gesture.enabled ? L" [enabled]" : L" [disabled]";
-    label += L" - " + std::to_wstring(gesture.templates.size()) + L" sample(s)";
+    std::wstring gesture_label = wide(gesture.name);
+    gesture_label += gesture.enabled ? L" [active]" : L" [inactive]";
+    ::SendDlgItemMessageW(window_, gesture_select_id, CB_ADDSTRING, 0,
+                          reinterpret_cast<LPARAM>(gesture_label.c_str()));
+    const auto action = configuration_->profiles.global_actions.find(gesture.id);
+    if (action == configuration_->profiles.global_actions.end()) continue;
+    const std::wstring label = wide(actions::action_label(action->second));
     ::SendDlgItemMessageW(window_, gestures_id, LB_ADDSTRING, 0,
                           reinterpret_cast<LPARAM>(label.c_str()));
+    action_gesture_ids_.push_back(gesture.id);
   }
+  if (!configuration_->gestures.gestures.empty())
+    ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, 0, 0);
   refresh_preview();
 }
 
@@ -233,13 +257,14 @@ void GestureEditor::load() {
   auto action = configuration_->profiles.global_actions.find(gesture.id);
   std::string summary;
   if (action != configuration_->profiles.global_actions.end()) {
-    summary = actions::action_type_name(action->second.type) + "." +
-              actions::action_operation_name(action->second);
+    summary = actions::action_display_name(action->second);
   }
   ::SetDlgItemTextW(window_, shortcut_id, wide(summary).c_str());
   ::SendDlgItemMessageW(window_, shortcut_id, EM_SETREADONLY, TRUE, 0);
   ::EnableWindow(::GetDlgItem(window_, shortcut_id), TRUE);
   ::EnableWindow(::GetDlgItem(window_, global_assign_id), TRUE);
+  ::EnableWindow(::GetDlgItem(window_, global_remove_id),
+                 action != configuration_->profiles.global_actions.end());
   refresh_preview();
 }
 
@@ -261,7 +286,7 @@ void GestureEditor::add() {
     }
   }
   refresh();
-  ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL,
+  ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL,
                         configuration_->gestures.gestures.size() - 1, 0);
   load();
 }
@@ -275,7 +300,7 @@ void GestureEditor::rename() {
                          name))
     ::MessageBoxW(window_, L"Enter a unique gesture name.", L"Strokes++", MB_OK | MB_ICONERROR);
   refresh();
-  ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, chosen, 0);
+  ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, chosen, 0);
   load();
 }
 
@@ -294,7 +319,7 @@ void GestureEditor::erase() {
   if (!configuration_->gestures.gestures.empty()) {
     const int next = std::min(chosen,
                               static_cast<int>(configuration_->gestures.gestures.size()) - 1);
-    ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, next, 0);
+    ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, next, 0);
     load();
   }
 }
@@ -314,7 +339,7 @@ void GestureEditor::train() {
   if (repository.add_template(definition.id, {id, std::move(*stroke)}))
     (void)repository.set_enabled(definition.id, true);
   refresh();
-  ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, chosen, 0);
+  ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, chosen, 0);
   load();
 }
 
@@ -326,7 +351,7 @@ void GestureEditor::drop_sample() {
   gestures::GestureRepository repository(configuration_->gestures.gestures);
   (void)repository.remove_template(gesture.id, gesture.templates.back().id);
   refresh();
-  ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, chosen, 0);
+  ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, chosen, 0);
   load();
 }
 
@@ -342,7 +367,7 @@ void GestureEditor::toggle() {
     return;
   }
   refresh();
-  ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, chosen, 0);
+  ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, chosen, 0);
   load();
 }
 
@@ -362,6 +387,30 @@ void GestureEditor::assign() {
                                                               std::move(*result.action));
   else
     configuration_->profiles.global_actions.erase(gesture_id);
+  refresh();
+  ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, chosen, 0);
+  load();
+}
+
+void GestureEditor::remove_action() {
+  const int chosen = index();
+  if (chosen < 0) return;
+  const auto& gesture = configuration_->gestures.gestures[static_cast<std::size_t>(chosen)];
+  configuration_->profiles.global_actions.erase(gesture.id);
+  refresh();
+  ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, chosen, 0);
+  load();
+}
+
+void GestureEditor::select_action() {
+  const LRESULT selected = ::SendDlgItemMessageW(window_, gestures_id, LB_GETCURSEL, 0, 0);
+  if (selected == LB_ERR || static_cast<std::size_t>(selected) >= action_gesture_ids_.size()) return;
+  const auto found = std::ranges::find(configuration_->gestures.gestures,
+                                       action_gesture_ids_[static_cast<std::size_t>(selected)],
+                                       &gestures::GestureDefinition::id);
+  if (found == configuration_->gestures.gestures.end()) return;
+  const auto index = static_cast<LRESULT>(found - configuration_->gestures.gestures.begin());
+  ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, index, 0);
   load();
 }
 

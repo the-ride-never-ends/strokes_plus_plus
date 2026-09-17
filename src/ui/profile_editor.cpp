@@ -177,8 +177,7 @@ void ProfileEditor::load(const std::string& gesture_id) {
   auto action = profile.actions_by_gesture.find(gesture_id);
   std::string summary;
   if (action != profile.actions_by_gesture.end())
-    summary = actions::action_type_name(action->second.type) + "." +
-              actions::action_operation_name(action->second);
+    summary = actions::action_display_name(action->second);
   ::SetDlgItemTextW(window_, profile_shortcut_id, wide(summary).c_str());
   ::SendDlgItemMessageW(window_, profile_shortcut_id, EM_SETREADONLY, TRUE, 0);
 }

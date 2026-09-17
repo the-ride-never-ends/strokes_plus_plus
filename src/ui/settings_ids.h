@@ -28,7 +28,9 @@ enum : int {
   gesture_inventory_id,
   gesture_section_label_id,
   global_action_label_id,
+  assigned_action_label_id,
   gesture_preview_id,
+  gesture_select_id,
   shortcut_id,
   gestures_id,
   gesture_name_id,
@@ -61,6 +63,7 @@ enum : int {
   profile_toggle_id,
   profile_assign_id,
   global_assign_id,
+  global_remove_id,
   help_text_id,
   save_id,
   cancel_id

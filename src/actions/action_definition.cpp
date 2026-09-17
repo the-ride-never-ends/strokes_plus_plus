@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <cmath>
+#include <sstream>
 #include <string_view>
 #include <utility>
 
@@ -301,6 +302,224 @@ std::string action_target_name(const ActionDefinition& definition) {
     }
   }
   return {};
+}
+
+std::string action_display_name(const ActionDefinition& definition) {
+  const auto mouse_button = [](MouseButton button) -> std::string_view {
+    switch (button) {
+      case MouseButton::left: return "Left";
+      case MouseButton::right: return "Right";
+      case MouseButton::middle: return "Middle";
+      case MouseButton::x_button_1: return "XButton1";
+      case MouseButton::x_button_2: return "XButton2";
+    }
+    return "Unknown";
+  };
+  const auto position = [](const PositionDefinition& value) {
+    switch (value.target) {
+      case PositionTarget::current_cursor: return std::string{"current cursor"};
+      case PositionTarget::gesture_start: return std::string{"gesture start"};
+      case PositionTarget::gesture_end: return std::string{"gesture end"};
+      case PositionTarget::absolute:
+        if (value.absolute)
+          return "(" + std::to_string(static_cast<int>(value.absolute->x)) + ", " +
+                 std::to_string(static_cast<int>(value.absolute->y)) + ")";
+        return std::string{"absolute position"};
+    }
+    return std::string{"unknown position"};
+  };
+  const auto window_target = [](WindowTarget target) -> std::string_view {
+    switch (target) {
+      case WindowTarget::gesture_window: return "gesture window";
+      case WindowTarget::foreground_window: return "foreground window";
+      case WindowTarget::window_at_gesture_start: return "window at gesture start";
+    }
+    return "unknown window";
+  };
+  const auto amount = [](double value) {
+    std::ostringstream output;
+    output << value;
+    return output.str();
+  };
+
+  switch (definition.type) {
+    case ActionType::keyboard_shortcut:
+      if (const auto* value = parameters<KeyboardParameters>(definition)) return value->shortcut;
+      break;
+    case ActionType::process:
+      if (const auto* value = parameters<ProcessParameters>(definition)) {
+        std::string result = "Launch " + value->path;
+        if (!value->arguments.empty()) result += " " + value->arguments;
+        return result;
+      }
+      break;
+    case ActionType::url:
+      if (const auto* value = parameters<UrlParameters>(definition)) return "Open " + value->uri;
+      break;
+    case ActionType::mouse:
+      if (const auto* value = parameters<MouseParameters>(definition)) {
+        std::string operation;
+        switch (value->operation) {
+          case MouseOperation::click: operation = "click"; break;
+          case MouseOperation::double_click: operation = "double-click"; break;
+          case MouseOperation::button_down: operation = "button down"; break;
+          case MouseOperation::button_up: operation = "button up"; break;
+          case MouseOperation::move: operation = "Move pointer"; break;
+        }
+        if (value->operation == MouseOperation::move)
+          return operation + " to " + position(value->position);
+        return std::string(mouse_button(value->button.value_or(MouseButton::left))) + " " +
+               operation + " at " + position(value->position);
+      }
+      break;
+    case ActionType::window:
+      if (const auto* value = parameters<WindowParameters>(definition)) {
+        std::string operation;
+        switch (value->operation) {
+          case WindowOperation::close: operation = "Close"; break;
+          case WindowOperation::minimize: operation = "Minimize"; break;
+          case WindowOperation::maximize: operation = "Maximize"; break;
+          case WindowOperation::restore: operation = "Restore"; break;
+          case WindowOperation::activate: operation = "Activate"; break;
+          case WindowOperation::move: operation = "Move"; break;
+          case WindowOperation::resize: operation = "Resize"; break;
+          case WindowOperation::move_resize: operation = "Move and resize"; break;
+        }
+        std::string result = operation + " " + std::string(window_target(value->target));
+        if (value->x && value->y)
+          result += " to (" + std::to_string(*value->x) + ", " + std::to_string(*value->y) + ")";
+        if (value->width && value->height)
+          result += " to " + std::to_string(*value->width) + "x" +
+                    std::to_string(*value->height);
+        return result;
+      }
+      break;
+    case ActionType::media:
+      if (const auto* value = parameters<MediaParameters>(definition)) {
+        switch (value->operation) {
+          case MediaOperation::play_pause: return "Media Play/Pause";
+          case MediaOperation::next_track: return "Media Next Track";
+          case MediaOperation::previous_track: return "Media Previous Track";
+          case MediaOperation::stop: return "Media Stop";
+        }
+      }
+      break;
+    case ActionType::volume:
+      if (const auto* value = parameters<VolumeParameters>(definition)) {
+        switch (value->operation) {
+          case VolumeOperation::increase:
+            return "Volume Up" + (value->amount ? " " + amount(*value->amount) + "%" : "");
+          case VolumeOperation::decrease:
+            return "Volume Down" + (value->amount ? " " + amount(*value->amount) + "%" : "");
+          case VolumeOperation::mute_toggle: return "Toggle Mute";
+        }
+      }
+      break;
+    case ActionType::virtual_desktop:
+      if (const auto* value = parameters<VirtualDesktopParameters>(definition)) {
+        switch (value->operation) {
+          case VirtualDesktopOperation::next: return "Next Desktop";
+          case VirtualDesktopOperation::previous: return "Previous Desktop";
+          case VirtualDesktopOperation::create: return "Create Desktop";
+          case VirtualDesktopOperation::close: return "Close Desktop";
+        }
+      }
+      break;
+  }
+  return "Unknown action";
+}
+
+std::string action_label(const ActionDefinition& definition) {
+  if (definition.type == ActionType::keyboard_shortcut) {
+    const auto* value = parameters<KeyboardParameters>(definition);
+    if (!value) return "Keyboard Shortcut";
+    std::string shortcut;
+    shortcut.reserve(value->shortcut.size());
+    for (const unsigned char character : value->shortcut) {
+      if (!std::isspace(character)) shortcut.push_back(static_cast<char>(std::toupper(character)));
+    }
+    if (shortcut == "ALT+SPACE,N") return "Minimize";
+    if (shortcut == "WIN+UP") return "Maximize";
+    if (shortcut == "ALT+RIGHT") return "Navigate Forward";
+    if (shortcut == "ALT+LEFT") return "Navigate Back";
+    if (shortcut == "ALT+F4") return "Close Window";
+    if (shortcut == "CTRL+C") return "Copy";
+    if (shortcut == "CTRL+X") return "Cut";
+    if (shortcut == "CTRL+V") return "Paste";
+    if (shortcut == "CTRL+Z") return "Undo";
+    if (shortcut == "CTRL+Y") return "Redo";
+    if (shortcut == "CTRL+A") return "Select All";
+    if (shortcut == "CTRL+N") return "New";
+    if (shortcut == "CTRL+S") return "Save";
+    if (shortcut == "CTRL+P") return "Print";
+    if (shortcut == "PAGEDOWN") return "Page Down";
+    if (shortcut == "PAGEUP") return "Page Up";
+    if (shortcut == "HOME") return "Home";
+    if (shortcut == "END") return "End";
+    if (shortcut == "CTRL+HOME") return "Start of Document";
+    if (shortcut == "CTRL+END") return "End of Document";
+    if (shortcut == "DELETE") return "Delete";
+    if (shortcut == "ESC") return "Escape";
+    if (shortcut == "F5") return "Refresh";
+    return "Keyboard Shortcut";
+  }
+  if (definition.type == ActionType::process) {
+    if (const auto* value = parameters<ProcessParameters>(definition)) {
+      std::string path;
+      path.reserve(value->path.size());
+      for (const unsigned char character : value->path)
+        path.push_back(static_cast<char>(std::tolower(character)));
+      if (path.ends_with("explorer.exe")) return "File Explorer";
+      if (path.ends_with("taskmgr.exe")) return "Task Manager";
+    }
+    return "Launch Program";
+  }
+  if (definition.type == ActionType::url) return "Open URL";
+  if (const auto* value = parameters<MouseParameters>(definition)) {
+    switch (value->operation) {
+      case MouseOperation::click: return "Mouse Click";
+      case MouseOperation::double_click: return "Mouse Double-Click";
+      case MouseOperation::button_down: return "Mouse Button Down";
+      case MouseOperation::button_up: return "Mouse Button Up";
+      case MouseOperation::move: return "Move Pointer";
+    }
+  }
+  if (const auto* value = parameters<WindowParameters>(definition)) {
+    switch (value->operation) {
+      case WindowOperation::close: return "Close Window";
+      case WindowOperation::minimize: return "Minimize";
+      case WindowOperation::maximize: return "Maximize";
+      case WindowOperation::restore: return "Restore";
+      case WindowOperation::activate: return "Activate Window";
+      case WindowOperation::move: return "Move Window";
+      case WindowOperation::resize: return "Resize Window";
+      case WindowOperation::move_resize: return "Move and Resize Window";
+    }
+  }
+  if (const auto* value = parameters<MediaParameters>(definition)) {
+    switch (value->operation) {
+      case MediaOperation::play_pause: return "Play/Pause";
+      case MediaOperation::next_track: return "Next Track";
+      case MediaOperation::previous_track: return "Previous Track";
+      case MediaOperation::stop: return "Stop Media";
+    }
+  }
+  if (const auto* value = parameters<VolumeParameters>(definition)) {
+    switch (value->operation) {
+      case VolumeOperation::increase: return "Increase Volume";
+      case VolumeOperation::decrease: return "Decrease Volume";
+      case VolumeOperation::mute_toggle: return "Toggle Mute";
+    }
+  }
+  if (const auto* value = parameters<VirtualDesktopParameters>(definition)) {
+    switch (value->operation) {
+      case VirtualDesktopOperation::next: return "Next Desktop";
+      case VirtualDesktopOperation::previous: return "Previous Desktop";
+      case VirtualDesktopOperation::create: return "Create Desktop";
+      case VirtualDesktopOperation::close: return "Close Desktop";
+    }
+  }
+  return "Unknown Action";
 }
 
 }  // namespace strokes::actions

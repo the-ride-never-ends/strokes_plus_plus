@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "config/configuration_store.h"
 
@@ -44,12 +45,15 @@ class GestureEditor {
   void drop_sample();
   void toggle();
   void assign();
+  void remove_action();
+  void select_action();
   [[nodiscard]] int index() const noexcept;
 
   HWND window_;
   HINSTANCE instance_;
   config::ConfigurationBundle* configuration_;
   HWND preview_{};
+  std::vector<std::string> action_gesture_ids_;
 };
 
 }  // namespace strokes::ui

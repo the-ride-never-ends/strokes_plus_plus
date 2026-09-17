@@ -316,6 +316,10 @@ int main() {
             !::IsWindowVisible(::GetDlgItem(settings_window, ui::profiles_id)) &&
             ::IsWindowVisible(::GetDlgItem(settings_window, ui::gesture_preview_id)),
         "selecting Global Actions hides options and shows the gesture editor and gesture preview");
+  check(::SendDlgItemMessageW(settings_window, ui::gesture_select_id, CB_GETCOUNT, 0, 0) == 36 &&
+            ::SendDlgItemMessageW(settings_window, ui::gestures_id, LB_GETCOUNT, 0, 0) == 30 &&
+            ::GetDlgItem(settings_window, ui::global_remove_id) != nullptr,
+        "Global Actions separates the full gesture selector from assigned action entries");
   (void)::SendMessageW(editor_tabs, TCM_SETCURSEL, 2, 0);
   (void)::SendMessageW(settings_window, WM_NOTIFY, ui::editor_tabs_id,
                        reinterpret_cast<LPARAM>(&tab_change));

@@ -496,7 +496,7 @@ bool decode_version(const Object& object, int current_version, int& version) {
     return true;
   }
   const auto decoded = integer_value(*encoded);
-  if (!decoded || *decoded != current_version) return false;
+  if (!decoded || *decoded < 1 || *decoded > current_version) return false;
   version = *decoded;
   return true;
 }

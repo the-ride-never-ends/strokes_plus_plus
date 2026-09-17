@@ -33,18 +33,18 @@ struct GlobalOptions {
   double movement_threshold{8.0};
   double minimum_point_distance{2.0};
   std::size_t maximum_points{4096};
-  double recognition_threshold{0.80};
+  double recognition_threshold{0.75}; // NOTE: Set by human developer. Don't touch
   OverlayOptions overlay;
 };
 
 struct GestureFile {
-  static constexpr int current_version = 1;
+  static constexpr int current_version = 3;
   int version{current_version};
   std::vector<gestures::GestureDefinition> gestures;
 };
 
 struct ProfileFile {
-  static constexpr int current_version = 1;
+  static constexpr int current_version = 2;
   int version{current_version};
   std::vector<context::ApplicationProfile> profiles;
   actions::ActionResolver::GlobalActions global_actions;

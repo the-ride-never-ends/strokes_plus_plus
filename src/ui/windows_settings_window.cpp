@@ -371,14 +371,18 @@ void WindowsSettingsWindow::load_help() const noexcept {
   row(L"Maximum points", maximum_points_help);
   row(L"Recognition threshold", recognition_threshold_help);
   section(L"Global Actions");
-  row(L"Gestures",
-      L"Lists the shapes you have created and their sample counts. Add creates one, Rename changes "
-      L"its name, Delete removes it, Train records another example, and Remove last sample removes "
-      L"its newest example. Enable / Disable controls whether that gesture can be recognized.");
+  row(L"Pattern selection",
+      L"Selects a gesture pattern for editing or action assignment. Pattern names describe how "
+      L"the gesture is drawn, such as Down Right or Diagonal Up-Right; they do not describe the "
+      L"attached action.");
+  row(L"Pattern editing",
+      L"Add creates a pattern, Rename changes its direction-based name, Delete removes it, Train "
+      L"records another example, and Remove last sample removes its newest example. Enable / "
+      L"Disable controls recognition independently of action assignment.");
   row(L"Global action",
-      L"Used when no matching application profile overrides it. Configure opens the action editor, "
-      L"where you can choose a keyboard shortcut, program, URI, mouse, window, media, volume, or "
-      L"virtual-desktop action. Remove clears the mapping.");
+      L"An optional action used when no matching application profile overrides it. Configure opens "
+      L"the action editor, where you can choose a keyboard shortcut, program, URI, mouse, window, "
+      L"media, volume, or virtual-desktop action. Removing an action does not remove the pattern.");
   section(L"Applications");
   row(L"Profiles",
       L"Let the same gesture perform different actions in different applications. Add, Rename, "
@@ -390,13 +394,27 @@ void WindowsSettingsWindow::load_help() const noexcept {
   row(L"Override action",
       L"Replaces the global action for the selected gesture when this profile matches. Configure "
       L"override opens the same action editor.");
-  row(L"Save / Cancel",
-      L"Save applies all changes. Cancel closes Settings without applying them.");
   section(L"Gestures");
+  row(L"Inventory",
+      L"Shows all 36 built-in direction patterns, including patterns that have no global or "
+      L"application action assigned.");
   row(L"Activated",
-      L"Shows every enabled gesture pattern in blue, whether or not it is assigned to an action.");
+      L"Shows enabled patterns in blue. Activated means the pattern can be recognized; it does not "
+      L"mean that an action is assigned.");
   row(L"Not Activated",
-      L"Shows every disabled gesture pattern in gray, whether or not it is assigned to an action.");
+      L"Shows disabled patterns in gray. They remain in the catalog and can be enabled later.");
+  row(L"Pattern names",
+      L"Names record the stroke directions in drawing order. Diagonal names include both vertical "
+      L"and horizontal direction; multi-part names list each successive direction.");
+  row(L"Direction arrows",
+      L"The arrowhead shows drawing direction in the preview only. It is not stored as part of the "
+      L"gesture sample.");
+  row(L"Action assignments",
+      L"Assign global behavior on the Global Actions tab and application-specific overrides on the "
+      L"Applications tab. A pattern does not need an assignment to remain in this inventory.");
+  section(L"Saving changes");
+  row(L"Save", L"Applies all changes and closes Settings.");
+  row(L"Cancel", L"Closes Settings without applying the current changes.");
 
   ::SetWindowTextW(help, display.c_str());
   PARAFORMAT2 paragraph{};
@@ -469,7 +487,6 @@ void WindowsSettingsWindow::load_values() {
   gestures_->refresh();
   profiles_->refresh();
   if (!working_.gestures.gestures.empty()) {
-    ::SendDlgItemMessageW(window_, gestures_id, LB_SETCURSEL, 0, 0);
     gestures_->load();
     profiles_->load(gestures_->selected());
   }

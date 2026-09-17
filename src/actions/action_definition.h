@@ -120,5 +120,9 @@ struct ActionValidationResult {
 [[nodiscard]] std::string action_type_name(ActionType type);
 [[nodiscard]] std::string action_operation_name(const ActionDefinition& definition);
 [[nodiscard]] std::string action_target_name(const ActionDefinition& definition);
+/// Returns a concise user-facing description including the action's meaningful parameters.
+[[nodiscard]] std::string action_display_name(const ActionDefinition& definition);
+/// Returns a short user-facing label suitable for action lists.
+[[nodiscard]] std::string action_label(const ActionDefinition& definition);
 
 }  // namespace strokes::actions

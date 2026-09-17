@@ -299,6 +299,61 @@ void executor_tests() {
         "action executor remains usable after a contained exception");
 }
 
+void display_name_tests() {
+  check(action_display_name(ActionDefinition::keyboard("CTRL+N")) == "CTRL+N",
+        "keyboard action summaries expose the actual key sequence");
+  check(action_display_name({1, ActionType::process,
+                             ProcessParameters{ProcessOperation::launch, "tool.exe", "--flag", {}}}) ==
+            "Launch tool.exe --flag",
+        "process action summaries expose the executable and arguments");
+  check(action_display_name({1, ActionType::url, UrlParameters{"https://example.com"}}) ==
+            "Open https://example.com",
+        "URL action summaries expose the destination");
+  check(action_display_name(
+            {1, ActionType::mouse,
+             MouseParameters{MouseOperation::double_click, MouseButton::left,
+                             {PositionTarget::gesture_start, std::nullopt}}}) ==
+            "Left double-click at gesture start",
+        "mouse action summaries expose the operation, button, and position");
+  check(action_display_name(
+            {1, ActionType::window,
+             WindowParameters{WindowOperation::move_resize, WindowTarget::gesture_window, 10, 20,
+                              800, 600}}) ==
+            "Move and resize gesture window to (10, 20) to 800x600",
+        "window action summaries expose the operation, target, position, and dimensions");
+  check(action_display_name(
+            {1, ActionType::media, MediaParameters{MediaOperation::next_track}}) ==
+            "Media Next Track",
+        "media action summaries expose the operation");
+  check(action_display_name(
+            {1, ActionType::volume, VolumeParameters{VolumeOperation::increase, 12.5}}) ==
+            "Volume Up 12.5%",
+        "volume action summaries expose configured amounts");
+  check(action_display_name(
+            {1, ActionType::virtual_desktop,
+             VirtualDesktopParameters{VirtualDesktopOperation::previous}}) ==
+            "Previous Desktop",
+        "virtual-desktop action summaries expose the operation");
+  check(action_label(ActionDefinition::keyboard("ALT+SPACE,N")) == "Minimize" &&
+            action_label(ActionDefinition::keyboard("win+up")) == "Maximize" &&
+            action_label(ActionDefinition::keyboard("CTRL+N")) == "New",
+        "common keyboard actions receive semantic list labels");
+  check(action_label(ActionDefinition::keyboard("CTRL+SHIFT+F12")) == "Keyboard Shortcut",
+        "unknown keyboard combinations retain a concise generic list label");
+  check(action_label(ActionDefinition::keyboard("PAGEDOWN")) == "Page Down" &&
+            action_label(ActionDefinition::keyboard("CTRL+HOME")) == "Start of Document" &&
+            action_label(ActionDefinition::keyboard("F5")) == "Refresh",
+        "navigation keyboard defaults receive semantic list labels");
+  check(action_label(
+            {1, ActionType::window,
+             WindowParameters{WindowOperation::resize, WindowTarget::gesture_window, {}, {}, 800,
+                              600}}) == "Resize Window" &&
+            action_label({1, ActionType::process,
+                          ProcessParameters{ProcessOperation::launch, "tool.exe", {}, {}}}) ==
+                "Launch Program",
+        "non-keyboard actions receive operation-level list labels");
+}
+
 }  // namespace
 
 void run_action_definition_tests() {
@@ -308,6 +363,7 @@ void run_action_definition_tests() {
   action_result_tests();
   factory_tests();
   executor_tests();
+  display_name_tests();
 }
 
 }  // namespace strokes::tests
