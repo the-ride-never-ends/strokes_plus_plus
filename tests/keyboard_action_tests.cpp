@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "actions/keyboard_action.h"
+#include "actions/keyboard_service.h"
 #include "actions/keyboard_shortcut.h"
 #include "test_support.h"
 
@@ -48,6 +49,10 @@ void parsing_tests() {
   check(!actions::parse_shortcut_sequence("ALT+SPACE,").has_value(),
         "an empty shortcut-sequence step is rejected");
   check(actions::parse_shortcut("CTRL+F24").has_value(), "function key parses");
+  check(actions::parse_key("ctrl") == VirtualKey::control &&
+            actions::parse_key("F5") ==
+                static_cast<VirtualKey>(static_cast<std::uint16_t>(VirtualKey::f1) + 4),
+        "individual primary and modifier key names parse");
   check(!actions::parse_shortcut("CTRL+").has_value(), "empty token is rejected");
   check(!actions::parse_shortcut("CTRL+CTRL+W").has_value(), "duplicate modifier is rejected");
   check(!actions::parse_shortcut("CTRL+W+T").has_value(), "multiple primary keys are rejected");
@@ -110,12 +115,30 @@ void held_modifier_and_failure_tests() {
         "the right Windows key is neutralized independently");
 }
 
+void service_key_state_tests() {
+  FakeKeyboardInput input;
+  actions::KeyboardService service(input);
+  check(service.send_key("CTRL", true).success &&
+            input.sent_events == std::vector{KeyEvent{VirtualKey::control, true}},
+        "keyboard service sends an individual modifier key-down event");
+  check(service.send_key("CTRL", false).success &&
+            input.sent_events == std::vector{KeyEvent{VirtualKey::control, false}},
+        "keyboard service sends an individual modifier key-up event");
+  input.held_keys = {VirtualKey::right_shift};
+  check(service.is_key_down("SHIFT") == true && service.is_key_down("CTRL") == false,
+        "keyboard service resolves logical modifier state from sided physical keys");
+  check(!service.send_key("NOT_A_KEY", true).success &&
+            !service.is_key_down("NOT_A_KEY").has_value(),
+        "keyboard service rejects unsupported key names");
+}
+
 }  // namespace
 
 void run_keyboard_action_tests() {
   parsing_tests();
   ordering_tests();
   held_modifier_and_failure_tests();
+  service_key_state_tests();
 }
 
 }  // namespace strokes::tests

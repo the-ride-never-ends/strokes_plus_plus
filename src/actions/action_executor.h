@@ -4,6 +4,7 @@
 #include <deque>
 #include <future>
 #include <mutex>
+#include <cstddef>
 #include <stop_token>
 #include <thread>
 
@@ -17,7 +18,7 @@ namespace strokes::actions {
 /// Executes short actions sequentially away from input and gesture-processing callbacks.
 class ActionExecutor {
  public:
-  explicit ActionExecutor(ActionServices services);
+  explicit ActionExecutor(ActionServices services, std::size_t max_pending = 64);
   ~ActionExecutor();
   ActionExecutor(const ActionExecutor&) = delete;
   ActionExecutor& operator=(const ActionExecutor&) = delete;
@@ -36,6 +37,7 @@ class ActionExecutor {
   static ActionResult cancelled();
 
   ActionServices services_;
+  std::size_t max_pending_;
   std::mutex mutex_;
   std::condition_variable_any wake_;
   std::deque<Work> queue_;

@@ -73,6 +73,12 @@ std::optional<VirtualKey> primary_key(std::string_view token) {
 
 }  // namespace
 
+std::optional<VirtualKey> parse_key(std::string_view text) {
+  const auto token = uppercase_trimmed(text);
+  if (const auto value = modifier_key(token)) return value;
+  return primary_key(token);
+}
+
 std::optional<KeyboardShortcut> parse_shortcut(std::string_view text) {
   KeyboardShortcut shortcut;
   bool has_primary_key = false;

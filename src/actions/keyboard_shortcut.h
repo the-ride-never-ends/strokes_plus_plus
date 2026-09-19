@@ -60,6 +60,8 @@ struct KeyboardShortcut {
 };
 
 [[nodiscard]] std::optional<KeyboardShortcut> parse_shortcut(std::string_view text);
+/// Parses one supported key name, including modifier-only names.
+[[nodiscard]] std::optional<VirtualKey> parse_key(std::string_view text);
 
 using KeyboardShortcutSequence = std::vector<KeyboardShortcut>;
 

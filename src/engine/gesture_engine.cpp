@@ -12,7 +12,9 @@ GestureEngine::GestureEngine(gestures::Recognizer& recognizer,
                              input::IMouseClick& mouse_click,
                              actions::IKeyboardInput& keyboard_input,
                              input::GestureStateMachine state_machine, IGestureFeedback* feedback,
-                             actions::ActionServices services)
+                             actions::ActionServices services,
+                             std::string_view lua_initialization_script,
+                             const std::filesystem::path& lua_module_directory)
     : recognizer_(recognizer),
       profiles_(profiles),
       global_actions_(global_actions),
@@ -24,10 +26,20 @@ GestureEngine::GestureEngine(gestures::Recognizer& recognizer,
       state_machine_(std::move(state_machine)),
       feedback_(feedback) {
   services_.keyboard = &keyboard_service_;
+  lua_runtime_.set_services(services_);
+  if (!lua_module_directory.empty()) lua_runtime_.set_module_directory(lua_module_directory);
+  const auto initialized = lua_runtime_.initialize(lua_initialization_script);
+  if (!initialized.success && services_.diagnostics) {
+    (void)services_.diagnostics->write("error",
+                                       "Lua initialization failed: " + initialized.message);
+  }
+  if (!services_.lua) services_.lua = &lua_runtime_;
   action_executor_ = std::make_unique<actions::ActionExecutor>(services_);
 }
 
 GestureEngine::~GestureEngine() {
+  lua_runtime_.request_cancel();
+  action_executor_.reset();
   if (feedback_) feedback_->hide();
   if (state_machine_.state() == input::GestureState::button_pending ||
       state_machine_.state() == input::GestureState::capturing) {
@@ -151,7 +163,7 @@ EngineUpdate GestureEngine::process(const input::MouseInputEvent& event) {
   result.action_target = actions::action_target_name(resolved->action);
   result.action_attempted = true;
   (void)state_machine_.recognition_finished(true);
-  result.action_result = execute(resolved->action);
+  result.action_result = execute(resolved->action, *state_machine_.session(), result.recognition);
   result.action_succeeded = result.action_result->success;
   (void)state_machine_.execution_finished();
   return result;
@@ -162,10 +174,12 @@ actions::ActionResult GestureEngine::execute(const actions::ActionDefinition& de
 }
 
 actions::ActionResult GestureEngine::execute(const actions::ActionDefinition& definition,
-                                             const input::GestureSession& session) {
+                                             const input::GestureSession& session,
+                                             std::optional<gestures::RecognitionResult> recognition) {
   actions::ActionContext context;
   context.gesture = session;
   context.application = session.application;
+  context.recognition = std::move(recognition);
   context.current_cursor_position =
       services_.mouse ? services_.mouse->current_position() : std::nullopt;
   if (session.application.window_handle != 0) {

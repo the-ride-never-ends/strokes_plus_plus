@@ -11,6 +11,7 @@ enum class ActionType {
   media,
   volume,
   virtual_desktop,
+  lua,
 };
 
 }  // namespace strokes::actions

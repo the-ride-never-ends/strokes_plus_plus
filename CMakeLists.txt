@@ -1,8 +1,20 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(strokes_plus_plus VERSION 0.8.0 LANGUAGES CXX)
+project(strokes_plus_plus VERSION 0.8.0 LANGUAGES C CXX)
 
 option(STROKES_BUILD_TESTS "Build the unit tests" ON)
+
+include(FetchContent)
+FetchContent_Declare(lua
+    URL https://www.lua.org/ftp/lua-5.4.9.tar.gz
+    URL_HASH SHA256=2335b6c582a52654f94612bf10d2f4672805d05329aa6568b1d8cd9e5c6fb8e6
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(lua)
+file(GLOB LUA_SOURCES CONFIGURE_DEPENDS "${lua_SOURCE_DIR}/src/*.c")
+list(REMOVE_ITEM LUA_SOURCES "${lua_SOURCE_DIR}/src/lua.c" "${lua_SOURCE_DIR}/src/luac.c")
+add_library(lua54 STATIC ${LUA_SOURCES})
+target_include_directories(lua54 PUBLIC "${lua_SOURCE_DIR}/src")
 
 add_library(strokes_core
     src/actions/action_definition.cpp
@@ -12,6 +24,7 @@ add_library(strokes_core
     src/actions/keyboard_action.cpp
     src/actions/keyboard_service.cpp
     src/actions/keyboard_shortcut.cpp
+    src/actions/lua_runtime.cpp
     src/actions/symbolic_resolver.cpp
     src/context/profile_matcher.cpp
     src/config/json.cpp
@@ -28,10 +41,11 @@ add_library(strokes_core
 )
 
 target_include_directories(strokes_core PUBLIC src)
+target_link_libraries(strokes_core PUBLIC lua54)
 target_compile_features(strokes_core PUBLIC cxx_std_20)
 
 if(MSVC)
-    target_compile_options(strokes_core PRIVATE /W4 /permissive- /EHsc)
+    target_compile_options(strokes_core PRIVATE /W4 /permissive- /EHsc /FS)
 else()
     target_compile_options(strokes_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
@@ -50,6 +64,7 @@ if(WIN32)
         src/actions/windows_process_service.cpp
         src/actions/windows_shell_service.cpp
         src/actions/windows_virtual_desktop_service.cpp
+        src/actions/windows_user_feedback_service.cpp
         src/actions/windows_window_service.cpp
         src/context/windows_application_context.cpp
         src/config/windows_app_data.cpp
@@ -72,7 +87,7 @@ if(WIN32)
                                                    comctl32)
     target_compile_features(strokes_windows PUBLIC cxx_std_20)
     if(MSVC)
-        target_compile_options(strokes_windows PRIVATE /W4 /permissive- /EHsc)
+        target_compile_options(strokes_windows PRIVATE /W4 /permissive- /EHsc /FS)
     endif()
 
     add_executable(StrokesPlusPlus WIN32
@@ -82,7 +97,7 @@ if(WIN32)
     target_link_libraries(StrokesPlusPlus PRIVATE strokes_windows psapi)
     target_compile_features(StrokesPlusPlus PRIVATE cxx_std_20)
     if(MSVC)
-        target_compile_options(StrokesPlusPlus PRIVATE /W4 /permissive- /EHsc)
+        target_compile_options(StrokesPlusPlus PRIVATE /W4 /permissive- /EHsc /FS)
     endif()
 
     install(TARGETS StrokesPlusPlus RUNTIME DESTINATION . COMPONENT Application)
@@ -115,7 +130,7 @@ if(STROKES_BUILD_TESTS)
     target_link_libraries(strokes_core_tests PRIVATE strokes_core)
     target_compile_features(strokes_core_tests PRIVATE cxx_std_20)
     if(MSVC)
-        target_compile_options(strokes_core_tests PRIVATE /W4 /permissive- /EHsc)
+        target_compile_options(strokes_core_tests PRIVATE /W4 /permissive- /EHsc /FS)
     else()
         target_compile_options(strokes_core_tests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
@@ -127,7 +142,7 @@ if(STROKES_BUILD_TESTS)
     target_link_libraries(strokes_performance_tests PRIVATE strokes_core)
     target_compile_features(strokes_performance_tests PRIVATE cxx_std_20)
     if(MSVC)
-        target_compile_options(strokes_performance_tests PRIVATE /W4 /permissive- /EHsc)
+        target_compile_options(strokes_performance_tests PRIVATE /W4 /permissive- /EHsc /FS)
     else()
         target_compile_options(strokes_performance_tests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
@@ -141,7 +156,7 @@ if(STROKES_BUILD_TESTS)
         target_link_libraries(strokes_windows_smoke_tests PRIVATE strokes_windows)
         target_compile_features(strokes_windows_smoke_tests PRIVATE cxx_std_20)
         if(MSVC)
-            target_compile_options(strokes_windows_smoke_tests PRIVATE /W4 /permissive- /EHsc)
+            target_compile_options(strokes_windows_smoke_tests PRIVATE /W4 /permissive- /EHsc /FS)
         endif()
         add_test(NAME strokes_windows_smoke_tests COMMAND strokes_windows_smoke_tests)
         add_test(NAME strokes_plus_plus_idle_test COMMAND StrokesPlusPlus --idle-test)

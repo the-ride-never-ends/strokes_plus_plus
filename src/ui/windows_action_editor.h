@@ -15,7 +15,7 @@ struct ActionEditResult {
   std::optional<actions::ActionDefinition> action;
 };
 
-/// Modal editor for every persisted Phase 2 action definition.
+/// Modal editor for every persisted built-in and Lua action definition.
 class WindowsActionEditor {
  public:
   [[nodiscard]] ActionEditResult edit(HINSTANCE instance, HWND owner,
@@ -29,6 +29,9 @@ class WindowsActionEditor {
   void refresh(bool reset_choices);
   void browse_executable();
   void browse_directory();
+  void validate_lua();
+  void test_lua();
+  void show_lua_help();
   void rescale_children(UINT old_dpi, UINT new_dpi) noexcept;
   [[nodiscard]] std::optional<actions::ActionDefinition> read() const;
   void finish(bool accepted, bool remove = false);

@@ -5,6 +5,7 @@
 
 #include "context/application_context.h"
 #include "gestures/point.h"
+#include "gestures/recognizer.h"
 #include "input/gesture_session.h"
 
 namespace strokes::actions {
@@ -13,6 +14,7 @@ namespace strokes::actions {
 struct ActionContext {
   input::GestureSession gesture;
   context::ApplicationContext application;
+  std::optional<gestures::RecognitionResult> recognition;
   std::optional<gestures::Point> current_cursor_position;
   std::optional<std::uintptr_t> gesture_window;
   std::optional<std::uintptr_t> foreground_window;

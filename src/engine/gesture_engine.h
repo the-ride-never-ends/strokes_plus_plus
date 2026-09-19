@@ -1,7 +1,9 @@
 #pragma once
 
+#include <filesystem>
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include "actions/action_resolver.h"
@@ -9,6 +11,7 @@
 #include "actions/action_executor.h"
 #include "actions/keyboard_action.h"
 #include "actions/keyboard_service.h"
+#include "actions/lua_runtime.h"
 #include "context/application_context_provider.h"
 #include "engine/gesture_feedback.h"
 #include "gestures/recognizer.h"
@@ -44,7 +47,9 @@ class GestureEngine {
                 input::IMouseClick& mouse_click, actions::IKeyboardInput& keyboard_input,
                 input::GestureStateMachine state_machine = {},
                 IGestureFeedback* feedback = nullptr,
-                actions::ActionServices services = {});
+                actions::ActionServices services = {},
+                std::string_view lua_initialization_script = {},
+                const std::filesystem::path& lua_module_directory = {});
   ~GestureEngine();
 
   [[nodiscard]] EngineUpdate process(const input::MouseInputEvent& event);
@@ -56,7 +61,9 @@ class GestureEngine {
  private:
   [[nodiscard]] actions::ActionResult execute(const actions::ActionDefinition& action);
   [[nodiscard]] actions::ActionResult execute(const actions::ActionDefinition& action,
-                                              const input::GestureSession& session);
+                                              const input::GestureSession& session,
+                                              std::optional<gestures::RecognitionResult> recognition =
+                                                  std::nullopt);
 
   gestures::Recognizer& recognizer_;
   const std::vector<context::ApplicationProfile>& profiles_;
@@ -65,6 +72,7 @@ class GestureEngine {
   const input::IModifierStateProvider& modifier_state_;
   input::IMouseClick& mouse_click_;
   actions::KeyboardService keyboard_service_;
+  actions::LuaRuntime lua_runtime_;
   actions::ActionServices services_;
   std::unique_ptr<actions::ActionExecutor> action_executor_;
   input::GestureStateMachine state_machine_;

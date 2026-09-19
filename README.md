@@ -104,6 +104,35 @@ Phase 1 keyboard records without an action-level `version` remain supported and 
 versioned representation on the next save. Invalid mappings are skipped independently, so valid
 sibling mappings remain usable; the log identifies rejected global or profile mapping IDs.
 
+## Lua scripting
+
+Choose **Lua Script** in the global or application-profile action editor. Scripts can be validated
+or tested before saving. Shared startup code is loaded from
+`%LOCALAPPDATA%\StrokesPlusPlus\scripts\init.lua`; restricted modules are loaded with `require`
+from its `modules` subdirectory.
+
+The editor's **API Help** button lists every namespace and signature. Automation functions return
+`true` on success and raise a catchable Lua error on failure. Query functions return the requested
+value. Available namespaces are `gesture`, `application`, `keyboard`, `mouse`, `window`, `process`,
+`shell`, `media`, `volume`, `desktop`, `ui`, and `log`.
+
+- `keyboard`: `hotkey(key, ...)`, `press(key)`, `down(key)`, `up(key)`, `is_down(key)`.
+- `mouse`: `position()`, `move(x, y)`, and `click`, `double_click`, `down`, or `up(button)`.
+- `window`: lifecycle and geometry operations plus `bounds`, `exists`, `title`, `class`, and
+  `process` queries; the optional target is `gesture` or `foreground`.
+- `process.launch(path [, arguments [, working_directory]])` and `shell.open(uri)`.
+- `media`: `play_pause()`, `next()`, `previous()`, and `stop()`.
+- `volume`: `increase(amount)`, `decrease(amount)`, `toggle_mute()`, `get()`, `set(value)`, and
+  `is_muted()`.
+- `desktop`: `next()`, `previous()`, `create()`, and `close()`.
+- `ui.message(text)` displays user feedback; `ui.osd(text)` displays an automatically dismissed
+  on-screen message.
+- `log`: `debug(text)`, `info(text)`, `warn(text)`, and `error(text)` write structured diagnostics.
+
+`gesture` exposes the recognized ID/name/score, start and finish points, duration, point count, and
+distance. `application` exposes process identity, executable path, and captured window metadata.
+Both context objects are read-only.
+
 ## Windows security boundary
 
 Strokes++ is designed to run without administrator privileges. Windows User Interface Privilege Isolation (UIPI) can prevent its `SendInput` keyboard shortcuts from reaching an application running at a higher integrity level, such as an administrator-elevated window. This is an expected Windows security restriction. The action is reported as an injection failure when Windows exposes the failure. Elevated-process automation is not part of the MVP, and running Strokes++ as administrator has not been tested nor is not recommended for normal use. Windows may also deny process-image queries for elevated windows. in that case process-name profile matching is unavailable, while title and window-class criteria can still be used.

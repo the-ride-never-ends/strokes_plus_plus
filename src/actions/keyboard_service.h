@@ -10,6 +10,8 @@ class KeyboardService final : public IKeyboardService {
  public:
   explicit KeyboardService(IKeyboardInput& input) : input_(input) {}
   [[nodiscard]] ActionResult send_shortcut(std::string_view shortcut) override;
+  [[nodiscard]] ActionResult send_key(std::string_view key, bool key_down) override;
+  [[nodiscard]] std::optional<bool> is_key_down(std::string_view key) const override;
 
  private:
   IKeyboardInput& input_;

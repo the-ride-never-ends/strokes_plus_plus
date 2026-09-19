@@ -149,6 +149,8 @@ void profile_tests() {
                      1, actions::ActionType::virtual_desktop,
                      actions::VirtualDesktopParameters{
                          actions::VirtualDesktopOperation::previous}});
+  input.global_actions.emplace("lua", actions::ActionDefinition::lua(
+                                          "keyboard.hotkey(\"CTRL\", \"W\")\nreturn true"));
   input.global_actions.emplace(
       "process-minimal",
       actions::ActionDefinition{1, actions::ActionType::process,
@@ -196,6 +198,8 @@ void profile_tests() {
        {{context::ApplicationProperty::process_name, context::MatchMode::exact, "chrome.exe"},
         {context::ApplicationProperty::window_title, context::MatchMode::contains, "GitHub"}},
        {{"left", actions::ActionDefinition::keyboard("CTRL+SHIFT+TAB")}}});
+  input.profiles.back().actions_by_gesture.emplace(
+      "scripted", actions::ActionDefinition::lua("return application.process == \"chrome.exe\""));
   auto result = round_trip(input, decode_profiles);
   check(static_cast<bool>(result), "profile file round trips");
   check(result.value->profiles.size() == 1 && result.value->profiles[0].criteria.size() == 2,
@@ -204,9 +208,12 @@ void profile_tests() {
             *actions::keyboard_shortcut(
                 result.value->profiles[0].actions_by_gesture.at("left")) == "CTRL+SHIFT+TAB",
         "global and profile actions are retained");
+  check(result.value->profiles[0].actions_by_gesture.at("scripted") ==
+            input.profiles[0].actions_by_gesture.at("scripted"),
+        "application-specific Lua scripts are retained");
   check(*actions::keyboard_shortcut(result.value->global_actions.at("minimize")) == "ALT+SPACE,N",
         "the minimize shortcut round trips as an ordinary editable shortcut");
-  for (const auto* id : {"process", "url", "mouse", "window", "media", "volume", "desktop",
+  for (const auto* id : {"process", "url", "mouse", "window", "media", "volume", "desktop", "lua",
                          "process-minimal", "mouse-current", "mouse-end", "window-minimal",
                          "window-move", "window-resize", "volume-default"}) {
     check(result.value->global_actions.at(id) == input.global_actions.at(id),

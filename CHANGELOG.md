@@ -4,7 +4,104 @@ All notable changes to Strokes++ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.10.0]
+
+### Phase 3 Lua scripting
+
+- Added the first-class Lua action definition and inline-script persistence for global and
+  application-profile gesture mappings.
+- Added a managed Lua execution-service boundary that receives the immutable action context,
+  returns structured service-unavailable failures until a runtime is installed, and leaves all
+  existing built-in action types unchanged.
+- Added validation, display summaries, factory delegation, context-forwarding, and configuration
+  round-trip coverage for Lua actions.
+- Embedded and checksum-pinned Lua 5.4.9 from the official source distribution, with the runtime
+  owned by the gesture engine and reused across action invocations.
+- Added protected syntax validation and execution, structured syntax and runtime errors with source
+  locations, persistent runtime globals, and explicit `true`, `false`, or no-value result handling.
+- Restricted the initial standard-library surface to base, math, string, table, and UTF-8 support,
+  with direct file-loading functions removed.
+- Enabled synchronized MSVC program-database writes for every project target to keep parallel
+  compilation reliable as the embedded runtime expands the build.
+- Exposed read-only `gesture` and `application` Lua context objects containing recognition identity
+  and score, start and finish coordinates, duration, point count, traveled distance, process
+  identity, window metadata, and the executable path when Windows makes it available.
+- Captured the full executable path alongside the existing executable name without changing the
+  meaning of existing `ApplicationContext` aggregate initializers.
+- Added engine-level coverage proving recognized Lua actions receive their recognition and captured
+  application context, plus runtime coverage for context values and rejected mutation attempts.
+- Added the Lua `keyboard` namespace with variadic hotkeys, single-key presses, explicit key-down
+  and key-up events, and live physical key-state queries.
+- Extended the shared keyboard service with validated individual-key injection and logical modifier
+  queries backed by the existing sided physical-key state, keeping Lua automation on the Phase 2
+  service boundary.
+- Added Lua argument and key-name validation plus coverage for Ctrl+Shift+T, F5, held/released
+  Shift detection, balanced Ctrl down/up calls, and rejected invalid inputs.
+- Added Lua `process.launch` with optional arguments and working directory, plus `shell.open` for
+  registered URLs and URIs.
+- Added complete Lua `media` and `desktop` namespaces over the existing Phase 2 services, including
+  play/pause, track navigation, stop, desktop navigation, creation, and closing.
+- Added strict argument validation and structured propagation of process-launch, shell-open, and
+  unsupported virtual-desktop failures into protected Lua runtime errors.
+- Added the Lua `mouse` namespace for reading and moving the pointer and for clicking,
+  double-clicking, holding, and releasing left, right, middle, X1, and X2 buttons.
+- Preserved Windows virtual-desktop coordinates, including negative monitor positions, and added
+  defined errors for invalid buttons, non-finite or nonnumeric coordinates, and unavailable cursor
+  state.
+- Added Lua window control for close, minimize, maximize, restore, activate, move, resize, and
+  move-resize operations, defaulting to the captured gesture window with optional live foreground
+  targeting.
+- Added read-only window bounds and existence queries, strict target and dimension validation, and
+  propagation of activation and other platform failures as protected Lua errors.
+- Added Lua window title, class, and process-name queries for gesture and foreground targets, backed
+  by live Windows application-context capture.
+- Added the complete Lua `volume` namespace for relative changes, mute toggling, reading and setting
+  the normalized 0-100 output level, and reading mute state.
+- Extended the Core Audio service with reusable endpoint acquisition and query/set operations while
+  preserving the existing volume-action behavior and structured HRESULT failures.
+- Added configurable Lua execution deadlines enforced through instruction hooks, interrupting
+  infinite and excessively long scripts with structured runtime failures.
+- Added thread-safe Lua cancellation and connected engine shutdown to cancel an active script before
+  joining the action executor, preventing runaway automation from blocking application exit.
+- Bounded the sequential action queue at 64 pending actions and added an immediate structured
+  `action_queue_full` result when rapid triggers exceed that limit.
+- Added deterministic concurrency coverage proving Lua actions never execute concurrently through
+  the shared executor and queued scripts retain submission order.
+- Added engine-level Lua precedence coverage for application-script overrides, application built-in
+  overrides, and global Lua fallback through the existing resolver.
+- Added end-to-end failure recovery coverage proving the engine returns to idle and continues
+  accepting both Lua and built-in gestures after a script error.
+- Added Lua `log.debug`, `log.info`, `log.warn`, and `log.error` functions backed by the existing
+  structured application logger, including strict message validation and protected reporting of
+  unavailable or failed diagnostic writes.
+- Added automatic shared Lua initialization from `scripts/init.lua` in the user configuration
+  directory, making its functions and values reusable across gesture actions while allowing normal
+  startup when the file is absent.
+- Contained initialization syntax and runtime errors, reported them through application diagnostics,
+  and kept the Lua runtime available for later actions.
+- Added a restricted Lua `require` implementation rooted at the user configuration directory's
+  `scripts/modules` folder, with cached module exports, nested dotted module names, clear missing
+  module errors, and rejection of traversal, slash, and other unapproved path syntax.
+- Added atomic Lua runtime reload support that rebuilds the restricted environment, reruns updated
+  initialization code, invalidates cached user modules, and clears runtime-only globals.
+- Kept the clean replacement runtime operational when reloaded initialization code fails, with
+  coverage for updated functions and modules, failure reporting, and process-lifetime-only state.
+- Added Lua Script to the shared global/profile action editor with a native multiline Windows edit
+  control, including standard clipboard and undo/redo behavior, validation, saving, and restoration
+  of existing scripts when mappings are edited.
+- Extended Windows smoke coverage to verify all nine action types and the multiline Lua editor while
+  preserving the existing dialog navigation and built-in-action controls.
+- Added Lua editor Validate and Test controls: validation reports protected syntax errors without
+  changing the script, while testing runs in an isolated managed runtime with empty gesture and
+  application context and reports either completion or the protected execution failure.
+- Added `ui.message` and `ui.osd` Lua feedback functions through a Windows user-feedback service;
+  OSD messages dismiss automatically and unsupported timed-message environments report a protected
+  Lua error.
+- Added an API Help view to the Lua editor and matching README documentation covering every exposed
+  namespace, function signature, parameter family, return convention, context object, shared
+  initialization path, and restricted module location.
+
+## [0.9.0]
 
 ### Windows installer
 

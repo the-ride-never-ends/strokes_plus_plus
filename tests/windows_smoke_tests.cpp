@@ -213,7 +213,7 @@ int main() {
   }
   check(action_window != nullptr && ::IsWindowVisible(action_window),
         "generic action editor creates a visible modal window");
-  check(action_window != nullptr && combo_exposes(action_window, 5001, 8),
+  check(action_window != nullptr && combo_exposes(action_window, 5001, 9),
         "action editor exposes every supported action type in its expanded dropdown");
   check(action_window != nullptr &&
             (::GetWindowLongPtrW(::GetDlgItem(action_window, 5001), GWL_STYLE) & WS_TABSTOP) != 0 &&
@@ -278,6 +278,16 @@ int main() {
     check(::IsWindowVisible(::GetDlgItem(action_window, 5016)) &&
               ::IsWindowVisible(::GetDlgItem(action_window, 5017)),
           "process action exposes executable and working-directory browsers");
+    ::SendDlgItemMessageW(action_window, 5001, CB_SETCURSEL, 8, 0);
+    ::SendMessageW(action_window, WM_COMMAND, MAKEWPARAM(5001, CBN_SELCHANGE), 0);
+    const LONG_PTR lua_style = ::GetWindowLongPtrW(::GetDlgItem(action_window, 5021), GWL_STYLE);
+    check(::IsWindowVisible(::GetDlgItem(action_window, 5021)) &&
+              (lua_style & ES_MULTILINE) != 0 && (lua_style & ES_WANTRETURN) != 0,
+          "Lua actions expose a multiline script editor with native editing semantics");
+    check(::IsWindowVisible(::GetDlgItem(action_window, 5023)) &&
+              ::IsWindowVisible(::GetDlgItem(action_window, 5024)) &&
+              ::IsWindowVisible(::GetDlgItem(action_window, 5025)),
+          "Lua actions expose syntax validation and protected test execution controls");
   }
   if (action_window) {
     actions::WindowsWindowService window_service;

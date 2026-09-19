@@ -109,6 +109,14 @@ ActionFactoryResult ActionFactory::create(const ActionDefinition& definition,
               }),
               validation};
     }
+    case ActionType::lua: {
+      const auto parameters = std::get<LuaParameters>(definition.parameters);
+      return {action([parameters, service = services.lua](const ActionContext& context) {
+                return service ? service->execute(parameters.script, context)
+                               : unavailable("Lua");
+              }),
+              validation};
+    }
   }
   return {nullptr, {false, "unknown_action_type", "The action type is unsupported."}};
 }

@@ -4,6 +4,8 @@
 #define NOMINMAX
 #include <Windows.h>
 
+#include "context/windows_application_context.h"
+
 namespace strokes::actions {
 namespace {
 
@@ -23,6 +25,28 @@ std::optional<IWindowService::Bounds> WindowsWindowService::bounds(std::uintptr_
   RECT rectangle{};
   if (!::IsWindow(handle) || !::GetWindowRect(handle, &rectangle)) return std::nullopt;
   return convert(rectangle);
+}
+
+bool WindowsWindowService::exists(std::uintptr_t window) const {
+  return ::IsWindow(reinterpret_cast<HWND>(window)) != FALSE;
+}
+
+std::optional<std::string> WindowsWindowService::title(std::uintptr_t window) const {
+  const context::WindowsApplicationContextProvider provider;
+  const auto application = provider.window_application(window);
+  return application ? std::optional{application->window_title} : std::nullopt;
+}
+
+std::optional<std::string> WindowsWindowService::class_name(std::uintptr_t window) const {
+  const context::WindowsApplicationContextProvider provider;
+  const auto application = provider.window_application(window);
+  return application ? std::optional{application->window_class} : std::nullopt;
+}
+
+std::optional<std::string> WindowsWindowService::process_name(std::uintptr_t window) const {
+  const context::WindowsApplicationContextProvider provider;
+  const auto application = provider.window_application(window);
+  return application ? std::optional{application->executable_name} : std::nullopt;
 }
 
 std::optional<IWindowService::MonitorInfo> WindowsWindowService::monitor(

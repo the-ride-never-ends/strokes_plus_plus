@@ -1,6 +1,7 @@
 #include "ui/windows_action_editor.h"
 
 #include <commdlg.h>
+#include <Richedit.h>
 #include <shlobj.h>
 
 #include <array>
@@ -11,6 +12,7 @@
 #include <string>
 #include <utility>
 
+#include "actions/lua_runtime.h"
 #include "ui/settings_controls.h"
 
 namespace strokes::ui {
@@ -38,6 +40,11 @@ enum : int {
   remove_id,
   save_action_id,
   cancel_action_id,
+  lua_script_id,
+  lua_script_label_id,
+  validate_lua_id,
+  test_lua_id,
+  lua_help_id,
 };
 
 void show(HWND window, int id, bool visible) {
@@ -168,6 +175,9 @@ LRESULT WindowsActionEditor::handle_message(UINT message, WPARAM wp, LPARAM lp) 
   else if (command == position_id && HIWORD(wp) == CBN_SELCHANGE) refresh(false);
   else if (command == browse_file_id) browse_executable();
   else if (command == browse_directory_id) browse_directory();
+  else if (command == validate_lua_id) validate_lua();
+  else if (command == test_lua_id) test_lua();
+  else if (command == lua_help_id) show_lua_help();
   else if (command == remove_id) finish(true, true);
   else if (command == cancel_action_id) finish(false);
   else if (command == save_action_id) {
@@ -193,7 +203,7 @@ void WindowsActionEditor::create_controls() {
   control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, type_id, 150, 18, 360, 220);
   reset_combo(window_, type_id,
               {L"Keyboard Shortcut", L"Launch Program", L"Open URL / URI", L"Mouse", L"Window",
-               L"Media", L"Volume", L"Virtual Desktop"});
+               L"Media", L"Volume", L"Virtual Desktop", L"Lua Script"});
   text(window_, operation_label_id, L"Operation", 20, 62, 120);
   control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, operation_id, 150, 58, 360, 220);
   text(window_, option_label_id, L"Button / target", 20, 102, 120);
@@ -210,7 +220,15 @@ void WindowsActionEditor::create_controls() {
   control(window_, L"BUTTON", L"Browse...", BS_PUSHBUTTON, browse_directory_id, 444, 258, 66, 24);
   text(window_, fourth_label_id, L"Value", 20, 302, 120);
   control(window_, L"EDIT", L"", ES_AUTOHSCROLL, fourth_id, 150, 298, 360, 24);
+  text(window_, lua_script_label_id, L"Lua script", 20, 62, 120);
+  control(window_, L"BUTTON", L"API Help", BS_PUSHBUTTON, lua_help_id, 420, 54, 90, 26);
+  (void)::LoadLibraryW(L"Msftedit.dll");
+  control(window_, MSFTEDIT_CLASS, L"",
+          ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL,
+          lua_script_id, 20, 88, 490, 242);
   control(window_, L"BUTTON", L"Remove mapping", BS_PUSHBUTTON, remove_id, 20, 350, 120, 28);
+  control(window_, L"BUTTON", L"Validate", BS_PUSHBUTTON, validate_lua_id, 150, 350, 86, 28);
+  control(window_, L"BUTTON", L"Test", BS_PUSHBUTTON, test_lua_id, 244, 350, 72, 28);
   control(window_, L"BUTTON", L"Save", BS_DEFPUSHBUTTON, save_action_id, 350, 350, 76, 28);
   control(window_, L"BUTTON", L"Cancel", BS_PUSHBUTTON, cancel_action_id, 434, 350, 76, 28);
   ::EnumChildWindows(window_, [](HWND child, LPARAM font) -> BOOL {
@@ -226,9 +244,11 @@ void WindowsActionEditor::refresh(bool reset_choices) {
     ::SetDlgItemTextW(window_, second_id, L"");
     ::SetDlgItemTextW(window_, third_id, L"");
     ::SetDlgItemTextW(window_, fourth_id, L"");
+    ::SetDlgItemTextW(window_, lua_script_id, L"");
   }
   bool operation = false, option = false, position = false;
   bool first = false, second = false, third = false, fourth = false;
+  bool lua_script = false;
   bool browse_file = false, browse_directory = false;
   if (type == 0) {
     first = true;
@@ -279,6 +299,8 @@ void WindowsActionEditor::refresh(bool reset_choices) {
   } else if (type == 7) {
     operation = true;
     if (reset_choices) reset_combo(window_, operation_id, {L"Next desktop", L"Previous desktop", L"Create desktop", L"Close desktop"});
+  } else if (type == 8) {
+    lua_script = true;
   }
   show(window_, operation_label_id, operation); show(window_, operation_id, operation);
   show(window_, option_label_id, option); show(window_, option_id, option);
@@ -287,6 +309,11 @@ void WindowsActionEditor::refresh(bool reset_choices) {
   show(window_, second_label_id, second); show(window_, second_id, second);
   show(window_, third_label_id, third); show(window_, third_id, third);
   show(window_, fourth_label_id, fourth); show(window_, fourth_id, fourth);
+  show(window_, lua_script_label_id, lua_script);
+  show(window_, lua_script_id, lua_script);
+  show(window_, validate_lua_id, lua_script);
+  show(window_, test_lua_id, lua_script);
+  show(window_, lua_help_id, lua_script);
   show(window_, browse_file_id, browse_file); show(window_, browse_directory_id, browse_directory);
 }
 
@@ -334,6 +361,8 @@ void WindowsActionEditor::load(const actions::ActionDefinition* existing) {
                  std::get_if<actions::VirtualDesktopParameters>(&existing->parameters)) {
     ::SendDlgItemMessageW(window_, operation_id, CB_SETCURSEL,
                           static_cast<int>(desktop->operation), 0);
+  } else if (const auto* lua = std::get_if<actions::LuaParameters>(&existing->parameters)) {
+    ::SetDlgItemTextW(window_, lua_script_id, detail::wide(lua->script).c_str());
   }
   refresh(false);
 }
@@ -408,6 +437,8 @@ std::optional<actions::ActionDefinition> WindowsActionEditor::read() const {
         1, actions::ActionType::virtual_desktop,
         actions::VirtualDesktopParameters{
             static_cast<actions::VirtualDesktopOperation>(operation)}};
+  if (type == 8)
+    return actions::ActionDefinition::lua(detail::read_utf8(window_, lua_script_id));
   return std::nullopt;
 }
 
@@ -432,6 +463,47 @@ void WindowsActionEditor::browse_directory() {
     if (::SHGetPathFromIDListW(item, path.data())) ::SetDlgItemTextW(window_, third_id, path.data());
     ::CoTaskMemFree(item);
   }
+}
+
+void WindowsActionEditor::validate_lua() {
+  actions::LuaRuntime runtime;
+  const auto result = runtime.validate_script(detail::read_utf8(window_, lua_script_id));
+  const auto message =
+      detail::wide(result.success ? "Lua syntax is valid." : result.message);
+  ::MessageBoxW(window_, message.c_str(),
+                result.success ? L"Valid Lua Script" : L"Invalid Lua Script",
+                MB_OK | (result.success ? MB_ICONINFORMATION : MB_ICONERROR));
+}
+
+void WindowsActionEditor::test_lua() {
+  actions::LuaRuntime runtime;
+  const auto result = runtime.execute(detail::read_utf8(window_, lua_script_id), {});
+  ::MessageBoxW(window_,
+                detail::wide(result.success ? "Lua script completed successfully."
+                                            : result.message)
+                    .c_str(),
+                result.success ? L"Lua Test Succeeded" : L"Lua Test Failed",
+                MB_OK | (result.success ? MB_ICONINFORMATION : MB_ICONERROR));
+}
+
+void WindowsActionEditor::show_lua_help() {
+  constexpr wchar_t help[] =
+      L"Namespaces: gesture, application, window, keyboard, mouse, process, shell, media, "
+      L"volume, desktop, ui, log\n\n"
+      L"Functions return true on success or raise a catchable Lua error. Queries return their "
+      L"documented value.\n\n"
+      L"keyboard.hotkey(key, ...), press(key), down(key), up(key), is_down(key)\n"
+      L"mouse.position(), move(x, y), click(button), double_click(button), down(button), "
+      L"up(button)\n"
+      L"window.close([target]), minimize, maximize, restore, activate, move(x,y,[target]), "
+      L"resize(w,h,[target]), move_resize(x,y,w,h,[target]), bounds, exists, title, class, process\n"
+      L"process.launch(path [, arguments [, working_directory]]); shell.open(uri)\n"
+      L"media.play_pause(), next(), previous(), stop()\n"
+      L"volume.increase(amount), decrease(amount), toggle_mute(), get(), set(value), is_muted()\n"
+      L"desktop.next(), previous(), create(), close()\n"
+      L"ui.message(text), ui.osd(text)\n"
+      L"log.debug(text), info(text), warn(text), error(text)";
+  ::MessageBoxW(window_, help, L"Lua API Help", MB_OK | MB_ICONINFORMATION);
 }
 
 void WindowsActionEditor::rescale_children(UINT old_dpi, UINT new_dpi) noexcept {

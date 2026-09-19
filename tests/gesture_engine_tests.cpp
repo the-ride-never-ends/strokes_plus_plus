@@ -250,6 +250,95 @@ void global_action_pipeline() {
   check(engine.state() == GestureState::idle, "action pipeline finishes idle");
 }
 
+void lua_action_receives_recognition_context() {
+  Fixture fixture;
+  fixture.context.value.executable_path = "C:\\Program Files\\Chrome\\chrome.exe";
+  fixture.globals.emplace(
+      "right", ActionDefinition::lua(
+                   "return gesture.id == 'right' and gesture.name == 'Right' and "
+                   "gesture.score > 0.9 and gesture.start.x == 0 and gesture.finish.x == 30 "
+                   "and application.process == 'chrome.exe' and application.process_id == 20 "
+                   "and application.title == 'Chrome' and application.class == 'ChromeClass'"));
+  auto engine = fixture.engine();
+  (void)engine.process(mouse(MouseEventType::button_down, 0, 0));
+  (void)engine.process(mouse(MouseEventType::pointer_moved, 10, 0));
+  (void)engine.process(mouse(MouseEventType::pointer_moved, 20, 0));
+  const auto result = engine.process(mouse(MouseEventType::button_up, 30, 0));
+  check(result.recognition && result.action_succeeded && result.action_type == "lua",
+        "recognized Lua actions receive gesture and captured application context");
+  check(engine.state() == GestureState::idle,
+        "the engine returns to idle after successful Lua execution");
+}
+
+EngineUpdate perform_right_gesture(GestureEngine& engine) {
+  (void)engine.process(mouse(MouseEventType::button_down, 0, 0));
+  (void)engine.process(mouse(MouseEventType::pointer_moved, 10, 0));
+  (void)engine.process(mouse(MouseEventType::pointer_moved, 20, 0));
+  return engine.process(mouse(MouseEventType::button_up, 30, 0));
+}
+
+void lua_profile_precedence() {
+  {
+    Fixture fixture;
+    fixture.globals.emplace("right", ActionDefinition::keyboard("CTRL+W"));
+    fixture.profiles.push_back({
+        "chrome", "Chrome", true,
+        {{ApplicationProperty::process_name, MatchMode::exact, "chrome.exe"}},
+        {{"right", ActionDefinition::lua("return application.process == 'chrome.exe'")}}});
+    auto engine = fixture.engine();
+    const auto result = perform_right_gesture(engine);
+    check(result.action_succeeded && result.action_type == "lua" &&
+              result.action_source == ActionSource::application_profile &&
+              fixture.keyboard.events.empty(),
+          "an application Lua action overrides a global built-in action");
+  }
+  {
+    Fixture fixture;
+    fixture.globals.emplace("right", ActionDefinition::lua("error('global must not run')"));
+    fixture.profiles.push_back({
+        "chrome", "Chrome", true,
+        {{ApplicationProperty::process_name, MatchMode::exact, "chrome.exe"}},
+        {{"right", ActionDefinition::keyboard("CTRL+W")}}});
+    auto engine = fixture.engine();
+    const auto result = perform_right_gesture(engine);
+    check(result.action_succeeded && result.action_type == "keyboard" &&
+              result.action_source == ActionSource::application_profile &&
+              !fixture.keyboard.events.empty(),
+          "an application built-in action overrides a global Lua action");
+  }
+  {
+    Fixture fixture;
+    fixture.globals.emplace("right", ActionDefinition::lua("return true"));
+    auto engine = fixture.engine();
+    const auto result = perform_right_gesture(engine);
+    check(result.action_succeeded && result.action_type == "lua" &&
+              result.action_source == ActionSource::global,
+          "action resolution falls back to a global Lua action");
+  }
+}
+
+void lua_failure_recovery_pipeline() {
+  Fixture fixture;
+  fixture.globals.emplace("right", ActionDefinition::lua("error('injected Lua failure')"));
+  auto engine = fixture.engine();
+  const auto failed = perform_right_gesture(engine);
+  check(failed.action_attempted && !failed.action_succeeded &&
+            failed.action_result->code == "lua_runtime_error" &&
+            engine.state() == GestureState::idle,
+        "a failed Lua action returns the gesture engine to idle");
+
+  fixture.globals.insert_or_assign("right", ActionDefinition::lua("return true"));
+  const auto later_lua = perform_right_gesture(engine);
+  check(later_lua.action_succeeded,
+        "a valid Lua gesture executes after a previous Lua failure");
+
+  fixture.globals.insert_or_assign("right", ActionDefinition::keyboard("CTRL+W"));
+  const auto built_in = perform_right_gesture(engine);
+  check(built_in.action_succeeded && !fixture.keyboard.events.empty() &&
+            engine.state() == GestureState::idle,
+        "built-in actions and gesture capture remain usable after Lua failure");
+}
+
 void universal_minimize_pipeline() {
   Fixture fixture;
   (void)fixture.recognizer.add_gesture(
@@ -336,7 +425,8 @@ void generic_action_failure_recovers() {
                                         "executable_not_found", "Missing executable.");
   fixture.globals.emplace(
       "right", ActionDefinition{1, ActionType::process,
-                                 ProcessParameters{ProcessOperation::launch, "missing.exe", {}, {}}});
+                                 ProcessParameters{
+                                     ProcessOperation::launch, "missing.exe", {}, {}}});
   auto engine = fixture.engine(ActionServices{.process = &process});
   (void)engine.process(mouse(MouseEventType::button_down, 0, 0));
   (void)engine.process(mouse(MouseEventType::pointer_moved, 20, 0));
@@ -475,7 +565,8 @@ void recognized_gesture_dispatches_every_generic_action() {
 
 void legacy_keyboard_configuration_executes() {
   const auto parsed = config::json::parse(
-      R"({"version":1,"profiles":[],"global_actions":{"right":{"type":"keyboard","shortcut":"CTRL+W"}}})");
+      R"({"version":1,"profiles":[],"global_actions":{"right":)"
+      R"({"type":"keyboard","shortcut":"CTRL+W"}}})");
   const auto decoded = parsed ? config::decode_profiles(*parsed.value)
                               : config::DecodeResult<config::ProfileFile>{{}, "invalid JSON"};
   check(static_cast<bool>(decoded), "Phase 1 keyboard configuration decodes for execution");
@@ -646,6 +737,9 @@ void router_engine_feedback_integration() {
 void run_gesture_engine_tests() {
   ordinary_click_pipeline();
   global_action_pipeline();
+  lua_action_receives_recognition_context();
+  lua_profile_precedence();
+  lua_failure_recovery_pipeline();
   universal_minimize_pipeline();
   universal_maximize_pipeline();
   profile_override_and_context_snapshot();

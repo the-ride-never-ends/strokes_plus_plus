@@ -88,9 +88,15 @@ struct VirtualDesktopParameters {
   friend bool operator==(const VirtualDesktopParameters&, const VirtualDesktopParameters&) = default;
 };
 
+struct LuaParameters {
+  std::string script;
+  friend bool operator==(const LuaParameters&, const LuaParameters&) = default;
+};
+
 using ActionParameters =
     std::variant<KeyboardParameters, ProcessParameters, UrlParameters, MouseParameters,
-                 WindowParameters, MediaParameters, VolumeParameters, VirtualDesktopParameters>;
+                 WindowParameters, MediaParameters, VolumeParameters, VirtualDesktopParameters,
+                 LuaParameters>;
 
 struct ActionDefinition {
   static constexpr int current_version = 1;
@@ -101,6 +107,10 @@ struct ActionDefinition {
   [[nodiscard]] static ActionDefinition keyboard(std::string shortcut) {
     return {current_version, ActionType::keyboard_shortcut,
             KeyboardParameters{std::move(shortcut)}};
+  }
+
+  [[nodiscard]] static ActionDefinition lua(std::string script) {
+    return {current_version, ActionType::lua, LuaParameters{std::move(script)}};
   }
 
   friend bool operator==(const ActionDefinition&, const ActionDefinition&) = default;

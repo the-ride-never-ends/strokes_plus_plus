@@ -11,6 +11,7 @@ struct ApplicationContext {
   std::string executable_name;
   std::string window_title;
   std::string window_class;
+  std::string executable_path;
 };
 
 }  // namespace strokes::context

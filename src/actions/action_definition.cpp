@@ -218,6 +218,12 @@ ActionValidationResult validate(const ActionDefinition& definition) {
                  ? valid()
                  : invalid("unknown_operation", "The virtual desktop operation is unsupported.");
     }
+    case ActionType::lua: {
+      const auto* value = parameters<LuaParameters>(definition);
+      if (!value) return invalid("parameter_type_mismatch", "Lua parameters are required.");
+      if (value->script.empty()) return invalid("missing_script", "A Lua script is required.");
+      return valid();
+    }
   }
   return invalid("unknown_action_type", "The action type is unsupported.");
 }
@@ -232,6 +238,7 @@ std::string action_type_name(ActionType type) {
     case ActionType::media: return "media";
     case ActionType::volume: return "volume";
     case ActionType::virtual_desktop: return "virtual_desktop";
+    case ActionType::lua: return "lua";
   }
   return "unknown";
 }
@@ -284,6 +291,7 @@ std::string action_operation_name(const ActionDefinition& definition) {
       case VirtualDesktopOperation::close: return "close";
     }
   }
+  if (std::holds_alternative<LuaParameters>(definition.parameters)) return "execute";
   return definition.type == ActionType::keyboard_shortcut ? "shortcut" : "open";
 }
 
@@ -431,6 +439,13 @@ std::string action_display_name(const ActionDefinition& definition) {
         }
       }
       break;
+    case ActionType::lua:
+      if (const auto* value = parameters<LuaParameters>(definition)) {
+        const auto newline = value->script.find_first_of("\r\n");
+        const auto first_line = value->script.substr(0, newline);
+        return first_line.size() <= 60 ? first_line : first_line.substr(0, 57) + "...";
+      }
+      break;
   }
   return "Unknown action";
 }
@@ -519,6 +534,7 @@ std::string action_label(const ActionDefinition& definition) {
       case VolumeOperation::mute_toggle: return "Toggle Mute";
     }
   }
+  if (definition.type == ActionType::lua) return "Lua Script";
   if (const auto* value = parameters<VirtualDesktopParameters>(definition)) {
     switch (value->operation) {
       case VirtualDesktopOperation::next: return "Next Desktop";

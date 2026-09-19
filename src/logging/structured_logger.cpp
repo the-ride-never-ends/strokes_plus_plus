@@ -76,4 +76,13 @@ bool StructuredLogger::log(std::string_view event, config::json::Object fields) 
     return false;
   }
 }
+
+actions::ActionResult StructuredLogger::write(std::string_view level,
+                                              std::string_view message) {
+  if (log("lua_log", {{"level", std::string(level)}, {"message", std::string(message)}}))
+    return actions::ActionResult::succeeded();
+  return actions::ActionResult::failed(actions::ActionError::platform_failure,
+                                       "diagnostic_write_failed",
+                                       "The diagnostic message could not be written.");
+}
 }  // namespace strokes::logging

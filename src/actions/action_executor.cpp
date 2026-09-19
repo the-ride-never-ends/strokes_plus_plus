@@ -1,5 +1,6 @@
 #include "actions/action_executor.h"
 
+#include <algorithm>
 #include <exception>
 #include <utility>
 
@@ -7,8 +8,10 @@
 
 namespace strokes::actions {
 
-ActionExecutor::ActionExecutor(ActionServices services)
-    : services_(services), worker_([this](std::stop_token stop) { run(stop); }) {}
+ActionExecutor::ActionExecutor(ActionServices services, std::size_t max_pending)
+    : services_(services),
+      max_pending_((std::max)(std::size_t{1}, max_pending)),
+      worker_([this](std::stop_token stop) { run(stop); }) {}
 
 ActionExecutor::~ActionExecutor() {
   worker_.request_stop();
@@ -22,6 +25,12 @@ std::future<ActionResult> ActionExecutor::submit(ActionDefinition definition,
   auto result = work.completion.get_future();
   {
     std::lock_guard lock(mutex_);
+    if (queue_.size() >= max_pending_) {
+      work.completion.set_value(ActionResult::failed(
+          ActionError::unsupported_operation, "action_queue_full",
+          "The action queue has reached its supported limit."));
+      return result;
+    }
     queue_.push_back(std::move(work));
   }
   wake_.notify_one();

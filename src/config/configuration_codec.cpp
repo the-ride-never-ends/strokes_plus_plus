@@ -365,6 +365,12 @@ Value encode_action(const actions::ActionDefinition& action) {
       if (value) result.emplace("operation", encode(value->operation));
       break;
     }
+    case actions::ActionType::lua: {
+      result.emplace("type", "lua");
+      const auto* value = std::get_if<actions::LuaParameters>(&action.parameters);
+      if (value) result.emplace("script", value->script);
+      break;
+    }
   }
   return result;
 }
@@ -462,6 +468,9 @@ std::optional<actions::ActionDefinition> decode_action(const Value& value) {
     if (decoded)
       result = actions::ActionDefinition{version, actions::ActionType::virtual_desktop,
                                          actions::VirtualDesktopParameters{*decoded}};
+  } else if (*type == "lua") {
+    const auto* script = field_as<std::string>(*object, "script");
+    if (script) result = actions::ActionDefinition::lua(*script);
   }
 
   if (!result) return std::nullopt;

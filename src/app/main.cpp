@@ -7,6 +7,7 @@
 #include "actions/windows_shell_service.h"
 #include "actions/windows_window_service.h"
 #include "actions/windows_virtual_desktop_service.h"
+#include "actions/windows_user_feedback_service.h"
 #include "config/configuration_store.h"
 #include "config/windows_app_data.h"
 #include "context/windows_application_context.h"
@@ -34,6 +35,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cwchar>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -97,6 +100,12 @@ class EngineHost {
     // Disabling is a per-run convenience; every new process starts enabled.
     configuration_.global.gestures_enabled = true;
     (void)logger_->log("configuration_load", {{"used_defaults", !loaded}});
+    const auto lua_initialization_path = configuration_directory_ / "scripts" / "init.lua";
+    std::ifstream lua_initialization_file(lua_initialization_path, std::ios::binary);
+    if (lua_initialization_file) {
+      lua_initialization_script_.assign(std::istreambuf_iterator<char>(lua_initialization_file),
+                                        std::istreambuf_iterator<char>());
+    }
     recognizer_.set_threshold(configuration_.global.recognition_threshold);
     for (const auto& gesture : configuration_.gestures.gestures) {
       (void)recognizer_.add_gesture(gesture);
@@ -466,7 +475,10 @@ class EngineHost {
                                 .window = &window_service_,
                                 .media = &media_service_,
                                 .audio = &audio_service_,
-                                .virtual_desktop = &desktop_service_});
+                                .virtual_desktop = &desktop_service_,
+                                .diagnostics = logger_.get(),
+                                .user_feedback = &user_feedback_service_},
+        lua_initialization_script_, configuration_directory_ / "scripts" / "modules");
 
     while (!stop.stop_requested()) {
       const auto event = events_.wait_pop();
@@ -550,6 +562,7 @@ class EngineHost {
 
   config::ConfigurationBundle configuration_{config::ConfigurationStore::defaults()};
   std::filesystem::path configuration_directory_;
+  std::string lua_initialization_script_;
   HINSTANCE instance_{};
   std::unique_ptr<logging::StructuredLogger> logger_;
   bool ready_{true};
@@ -574,6 +587,7 @@ class EngineHost {
   actions::WindowsMediaService media_service_;
   actions::WindowsAudioService audio_service_;
   actions::WindowsVirtualDesktopService desktop_service_;
+  actions::WindowsUserFeedbackService user_feedback_service_;
   input::EventPump<input::MouseInputEvent, 4096> events_;
   std::mutex save_mutex_;
   std::condition_variable_any save_wake_;

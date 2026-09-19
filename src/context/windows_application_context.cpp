@@ -79,7 +79,7 @@ std::string window_class(HWND window) {
   }
 }
 
-std::string executable_name(DWORD process_id) {
+std::string executable_path(DWORD process_id) {
   const UniqueHandle process(::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id));
   if (!process) {
     return {};
@@ -93,8 +93,7 @@ std::string executable_name(DWORD process_id) {
     if (::GetLastError() != ERROR_INSUFFICIENT_BUFFER || path.size() >= 32768) return {};
     path.resize((std::min)(path.size() * 2, std::size_t{32768}));
   }
-  const std::filesystem::path executable(std::wstring_view(path.data(), length));
-  return utf8(executable.filename().native());
+  return utf8(std::wstring_view(path.data(), length));
 }
 
 }  // namespace
@@ -119,7 +118,9 @@ std::optional<ApplicationContext> WindowsApplicationContextProvider::window_appl
   ApplicationContext result;
   result.window_handle = reinterpret_cast<std::uintptr_t>(window);
   result.process_id = process_id;
-  result.executable_name = executable_name(process_id);
+  result.executable_path = executable_path(process_id);
+  if (!result.executable_path.empty())
+    result.executable_name = std::filesystem::path(result.executable_path).filename().string();
   result.window_title = window_title(window);
   result.window_class = window_class(window);
   return result;
