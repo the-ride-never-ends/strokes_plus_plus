@@ -1,3 +1,5 @@
+#include <string>
+
 #include "config/configuration_codec.h"
 #include "test_support.h"
 
@@ -151,6 +153,12 @@ void profile_tests() {
                          actions::VirtualDesktopOperation::previous}});
   input.global_actions.emplace("lua", actions::ActionDefinition::lua(
                                           "keyboard.hotkey(\"CTRL\", \"W\")\nreturn true"));
+  // A script typed into the rich edit control carries lone carriage returns, and a control
+  // character must survive the round trip rather than corrupting the file.
+  std::string control_script = "local a = 1\r\nlocal b = 2\rlocal c = 3\n";
+  control_script.push_back('\0');
+  control_script += "return true";
+  input.global_actions.emplace("lua-control", actions::ActionDefinition::lua(control_script));
   input.global_actions.emplace(
       "process-minimal",
       actions::ActionDefinition{1, actions::ActionType::process,
@@ -214,8 +222,8 @@ void profile_tests() {
   check(*actions::keyboard_shortcut(result.value->global_actions.at("minimize")) == "ALT+SPACE,N",
         "the minimize shortcut round trips as an ordinary editable shortcut");
   for (const auto* id : {"process", "url", "mouse", "window", "media", "volume", "desktop", "lua",
-                         "process-minimal", "mouse-current", "mouse-end", "window-minimal",
-                         "window-move", "window-resize", "volume-default"}) {
+                         "lua-control", "process-minimal", "mouse-current", "mouse-end",
+                         "window-minimal", "window-move", "window-resize", "volume-default"}) {
     check(result.value->global_actions.at(id) == input.global_actions.at(id),
           "a generic action and all of its parameters round trip");
   }

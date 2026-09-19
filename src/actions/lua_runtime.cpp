@@ -12,11 +12,12 @@
 #include <limits>
 #include <string>
 
-extern "C" {
+// Lua is compiled as C++ (CMakeLists.txt), so LUAI_THROW raises a C++ exception and
+// every error raised below destroys the C++ objects it unwinds. The headers must not
+// be wrapped in extern "C" or their declarations will not match those definitions.
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
-}
 
 namespace strokes::actions {
 namespace {
@@ -77,6 +78,16 @@ double stroke_distance(const gestures::Stroke& points) {
 }
 
 void install_context(lua_State* state, const ActionContext& context) {
+  if (!context.captured) {
+    // A script tested from the settings editor was not produced by a gesture, so both
+    // context globals are absent and reading one fails visibly instead of reporting a
+    // default-constructed position or an empty process name.
+    lua_pushnil(state);
+    lua_setglobal(state, "gesture");
+    lua_pushnil(state);
+    lua_setglobal(state, "application");
+    return;
+  }
   lua_newtable(state);
   if (context.recognition) {
     set_string(state, "id", context.recognition->gesture_id);
@@ -170,8 +181,11 @@ int keyboard_hotkey(lua_State* state) {
   if (count < 1) return luaL_error(state, "keyboard.hotkey requires at least one key");
   std::string shortcut;
   for (int index = 1; index <= count; ++index) {
+    const auto key = string_argument(state, index);
+    if (key.find_first_of("+,") != std::string_view::npos)
+      return luaL_error(state, "keyboard.hotkey keys must not contain '+' or ','");
     if (!shortcut.empty()) shortcut += '+';
-    shortcut += string_argument(state, index);
+    shortcut += key;
   }
   auto* keyboard = services(state).keyboard;
   if (!keyboard) return luaL_error(state, "keyboard service is unavailable");
@@ -180,9 +194,14 @@ int keyboard_hotkey(lua_State* state) {
 
 int keyboard_press(lua_State* state) {
   if (lua_gettop(state) != 1) return luaL_error(state, "keyboard.press requires one key");
+  const auto key = string_argument(state, 1);
+  if (key.find_first_of("+,") != std::string_view::npos)
+    return luaL_error(state, "keyboard.press sends one key; use keyboard.hotkey for a chord");
   auto* keyboard = services(state).keyboard;
   if (!keyboard) return luaL_error(state, "keyboard service is unavailable");
-  return return_result(state, keyboard->send_shortcut(string_argument(state, 1)));
+  const auto pressed = keyboard->send_key(key, true);
+  if (!pressed.success) return return_result(state, pressed);
+  return return_result(state, keyboard->send_key(key, false));
 }
 
 int keyboard_event(lua_State* state, bool key_down) {
@@ -526,6 +545,21 @@ int write_log(lua_State* state, std::string_view level) {
   return return_result(state, diagnostics->write(level, message));
 }
 
+int print_message(lua_State* state) {
+  const int count = lua_gettop(state);
+  std::string line;
+  for (int index = 1; index <= count; ++index) {
+    if (!line.empty()) line += '\t';
+    std::size_t size = 0;
+    const char* value = luaL_tolstring(state, index, &size);
+    line.append(value, size);
+    lua_pop(state, 1);
+  }
+  auto* diagnostics = services(state).diagnostics;
+  if (!diagnostics) return luaL_error(state, "diagnostic service is unavailable");
+  return return_result(state, diagnostics->write("info", line));
+}
+
 int log_debug(lua_State* state) { return write_log(state, "debug"); }
 int log_info(lua_State* state) { return write_log(state, "info"); }
 int log_warn(lua_State* state) { return write_log(state, "warn"); }
@@ -707,10 +741,12 @@ lua_State* create_state(ActionServices* action_services) {
   if (!state) return nullptr;
   luaL_requiref(state, LUA_GNAME, luaopen_base, 1);
   lua_pop(state, 1);
-  lua_pushnil(state);
-  lua_setglobal(state, "dofile");
-  lua_pushnil(state);
-  lua_setglobal(state, "loadfile");
+  // dofile and loadfile read the filesystem; the raw accessors write straight through
+  // the metatables that keep the gesture and application context read-only.
+  for (const char* removed : {"dofile", "loadfile", "rawset", "rawget", "rawequal", "rawlen"}) {
+    lua_pushnil(state);
+    lua_setglobal(state, removed);
+  }
   luaL_requiref(state, LUA_MATHLIBNAME, luaopen_math, 1);
   lua_pop(state, 1);
   luaL_requiref(state, LUA_STRLIBNAME, luaopen_string, 1);
@@ -723,6 +759,9 @@ lua_State* create_state(ActionServices* action_services) {
   lua_setfield(state, LUA_REGISTRYINDEX, module_cache_registry_key);
   lua_pushcfunction(state, require_module);
   lua_setglobal(state, "require");
+  lua_pushlightuserdata(state, action_services);
+  lua_pushcclosure(state, print_message, 1);
+  lua_setglobal(state, "print");
   install_keyboard(state, action_services);
   install_automation(state, action_services);
   return state;
@@ -785,6 +824,7 @@ ActionResult LuaRuntime::reload(std::string_view initialization_script) {
     }
     lua_State* previous = state_;
     state_ = replacement;
+    cancel_requested_.store(false, std::memory_order_relaxed);
     if (previous) lua_close(previous);
   }
   return initialize(initialization_script);
@@ -796,9 +836,12 @@ ActionResult LuaRuntime::execute(std::string_view script, const ActionContext& c
     return ActionResult::failed(ActionError::unsupported_operation, "lua_runtime_unavailable",
                                 "The Lua runtime could not be created.");
 
+  if (cancel_requested_.load(std::memory_order_relaxed))
+    return ActionResult::failed(ActionError::unsupported_operation, "lua_cancelled",
+                                "The Lua runtime has been cancelled.");
+
   install_context(state_, context);
   set_action_context(state_, &context);
-  cancel_requested_.store(false, std::memory_order_relaxed);
   auto result = load(state_, script);
   if (!result.success) {
     set_action_context(state_, nullptr);

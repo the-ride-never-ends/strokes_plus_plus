@@ -217,9 +217,9 @@ struct Fixture {
     context.value = {10, 20, "chrome.exe", "Chrome", "ChromeClass"};
   }
 
-  GestureEngine engine(ActionServices services = {}) {
+  GestureEngine engine(ActionServices services = {}, std::string_view initialization = {}) {
     return {recognizer, profiles, globals, context, modifiers, click, keyboard,
-            GestureStateMachine{}, nullptr, services};
+            GestureStateMachine{}, nullptr, services, initialization};
   }
 };
 
@@ -337,6 +337,24 @@ void lua_failure_recovery_pipeline() {
   check(built_in.action_succeeded && !fixture.keyboard.events.empty() &&
             engine.state() == GestureState::idle,
         "built-in actions and gesture capture remain usable after Lua failure");
+}
+
+void lua_shared_initialization_pipeline() {
+  Fixture fixture;
+  fixture.globals.emplace("right", ActionDefinition::lua("return shared_value()"));
+  auto engine = fixture.engine({}, "function shared_value() return true end");
+  check(perform_right_gesture(engine).action_succeeded,
+        "shared initialization code is available to Lua gesture actions");
+
+  fixture.globals.insert_or_assign("right", ActionDefinition::lua("return shared_value() == 9"));
+  check(engine.reload_scripts("function shared_value() return 9 end").success &&
+            perform_right_gesture(engine).action_succeeded,
+        "reloading the engine's Lua runtime replaces the shared definitions");
+
+  const auto failed_reload = engine.reload_scripts("function broken(");
+  fixture.globals.insert_or_assign("right", ActionDefinition::keyboard("CTRL+W"));
+  check(!failed_reload.success && perform_right_gesture(engine).action_succeeded,
+        "a failed reload is reported and leaves the engine executing actions");
 }
 
 void universal_minimize_pipeline() {
@@ -740,6 +758,7 @@ void run_gesture_engine_tests() {
   lua_action_receives_recognition_context();
   lua_profile_precedence();
   lua_failure_recovery_pipeline();
+  lua_shared_initialization_pipeline();
   universal_minimize_pipeline();
   universal_maximize_pipeline();
   profile_override_and_context_snapshot();

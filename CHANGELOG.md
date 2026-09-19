@@ -101,6 +101,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   namespace, function signature, parameter family, return convention, context object, shared
   initialization path, and restricted module location.
 
+### Phase 3 code review fixes
+
+- Built the embedded Lua library as C++ so that an error raised inside an API binding propagates as
+  a C++ exception. The bindings own strings, paths and an open file stream while they raise, and the
+  previous longjmp did not destroy them.
+- Made shutdown cancellation reachable. Cancellation is now requested by the application host before
+  the engine worker is joined, rather than by the engine destructor, which could only run once the
+  action had already finished; a cancelled runtime also refuses later scripts until it is reloaded
+  instead of clearing the request at the start of the next script.
+- Replaced the modal message boxes behind `ui.message` and `ui.osd` with a layered on-screen window
+  owned by its own message thread. Both return immediately, so feedback no longer blocks the action
+  worker, gesture recognition or application exit, and no longer depends on the undocumented
+  `MessageBoxTimeoutW` export.
+- Gave the action editor's Validate and Test controls the real automation services, the shared
+  initialization script and the module directory, so a tested script runs the automation it will
+  perform instead of reporting that every service is unavailable.
+- Made a script that no gesture produced, such as one run from Test, see no `gesture` and no
+  `application` globals at all, instead of default-constructed coordinates and empty process
+  identity.
+- Read the script from the editor using the count the copy reports rather than the rich edit
+  control's CRLF-based length estimate, which could append NUL characters to a saved multiline
+  script and make it fail to load.
+- Added Reload Lua Scripts to the notification-area menu, and re-read the initialization script
+  whenever the engine is rebuilt, so edits to `init.lua` no longer require restarting the
+  application while edits to modules did not.
+- Created the `scripts` and `scripts/modules` folders with a commented sample initialization script
+  on first run, and documented Lua scripting on the Settings Help tab.
+- Made `keyboard.press` send one key down and up through the individual-key service instead of the
+  shortcut-sequence parser, and rejected `+` and `,` inside `keyboard.press` and `keyboard.hotkey`
+  key names, where they silently produced a chord or a timed sequence.
+- Removed `rawset`, `rawget`, `rawequal` and `rawlen` from the script environment, because they
+  write straight through the metatables that keep the context objects read-only, and replaced
+  `print` with a binding that writes to the application log.
+- Replaced the single-message-box API help with a scrollable reference that lists every namespace
+  and function with its parameters, return value and description.
+- Replaced the action editor's hardcoded combo-box indices with named action types and
+  enum-derived comparisons, and pinned the combo and enum ordering with static assertions.
+- Reported a failed initialization script through user feedback as well as the application log, and
+  gave the engine an explicit, named Lua execution limit instead of relying on a constructor
+  default.
+- Captured a window's application context once per Lua window query instead of once per property.
+
+### Tests
+
+- Rewrote two assertions that passed for the wrong reason: a false `is_down` result was asserted
+  through the script's own false return value, and the module-traversal rejection was a Lua
+  string-escape syntax error that never reached the module loader.
+- Added coverage for engine-level shared initialization and runtime reload, the absence of file,
+  package and raw-access functions, `print`, cancellation that persists until reload, the empty
+  context, the new `keyboard.press` behaviour, rejected module names, and a configuration round
+  trip for a script containing carriage returns and a NUL character.
+
+
 ## [0.9.0]
 
 ### Windows installer

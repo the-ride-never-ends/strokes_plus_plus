@@ -106,17 +106,24 @@ sibling mappings remain usable; the log identifies rejected global or profile ma
 
 ## Lua scripting
 
-Choose **Lua Script** in the global or application-profile action editor. Scripts can be validated
-or tested before saving. Shared startup code is loaded from
-`%LOCALAPPDATA%\StrokesPlusPlus\scripts\init.lua`; restricted modules are loaded with `require`
-from its `modules` subdirectory.
+Choose **Lua Script** in the global or application-profile action editor. Shared startup code is
+loaded from `%LOCALAPPDATA%\StrokesPlusPlus\scripts\init.lua`; restricted modules are loaded with
+`require` from its `modules` subdirectory. Both are created on first run, and **Reload Lua Scripts**
+in the notification-area menu rebuilds the runtime from their current contents, which also clears
+values scripts have stored in Lua globals.
+
+**Validate** reports syntax errors without running the script. **Test** runs it immediately against
+the same automation services a gesture would use, so it can move windows and send input. A tested
+script was not produced by a gesture: the `gesture` and `application` globals are absent, and window
+functions report that the target is unavailable.
 
 The editor's **API Help** button lists every namespace and signature. Automation functions return
 `true` on success and raise a catchable Lua error on failure. Query functions return the requested
 value. Available namespaces are `gesture`, `application`, `keyboard`, `mouse`, `window`, `process`,
 `shell`, `media`, `volume`, `desktop`, `ui`, and `log`.
 
-- `keyboard`: `hotkey(key, ...)`, `press(key)`, `down(key)`, `up(key)`, `is_down(key)`.
+- `keyboard`: `hotkey(key, ...)` sends one chord; `press(key)` sends one key down and up and
+  rejects `+` or `,`; `down(key)`, `up(key)`, and `is_down(key)`.
 - `mouse`: `position()`, `move(x, y)`, and `click`, `double_click`, `down`, or `up(button)`.
 - `window`: lifecycle and geometry operations plus `bounds`, `exists`, `title`, `class`, and
   `process` queries; the optional target is `gesture` or `foreground`.
@@ -125,13 +132,20 @@ value. Available namespaces are `gesture`, `application`, `keyboard`, `mouse`, `
 - `volume`: `increase(amount)`, `decrease(amount)`, `toggle_mute()`, `get()`, `set(value)`, and
   `is_muted()`.
 - `desktop`: `next()`, `previous()`, `create()`, and `close()`.
-- `ui.message(text)` displays user feedback; `ui.osd(text)` displays an automatically dismissed
-  on-screen message.
+- `ui.message(text)` and `ui.osd(text)` display an on-screen message that dismisses itself; both
+  return immediately, so feedback never blocks the script or the engine.
 - `log`: `debug(text)`, `info(text)`, `warn(text)`, and `error(text)` write structured diagnostics.
+  `print(...)` writes to the same log at info level, because the application has no console.
 
 `gesture` exposes the recognized ID/name/score, start and finish points, duration, point count, and
 distance. `application` exposes process identity, executable path, and captured window metadata.
 Both context objects are read-only.
+
+The supported environment provides the base, `math`, `string`, `table`, and `utf8` libraries.
+`dofile`, `loadfile`, `rawset`, `rawget`, `rawequal`, and `rawlen` are removed: the first two read
+the filesystem, and the raw accessors would write through the metatables that keep the context
+objects read-only. A script that runs longer than one second is interrupted and reported as a
+failed action.
 
 ## Windows security boundary
 

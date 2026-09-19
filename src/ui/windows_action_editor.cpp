@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "actions/lua_runtime.h"
+#include "ui/lua_editor_environment.h"
 #include "ui/settings_controls.h"
 
 namespace strokes::ui {
@@ -45,7 +46,38 @@ enum : int {
   validate_lua_id,
   test_lua_id,
   lua_help_id,
+  help_text_id,
+  help_close_id,
 };
+
+/// Action-type combo indices. The combo strings, this list and ActionType share one order.
+enum : int {
+  keyboard_type = 0,
+  process_type,
+  url_type,
+  mouse_type,
+  window_type,
+  media_type,
+  volume_type,
+  desktop_type,
+  lua_type,
+};
+
+// Every combo in this editor is filled in enum order and read back by index, so the two
+// orders must stay identical. These pin the positions the index arithmetic below relies on.
+static_assert(static_cast<int>(actions::ActionType::keyboard_shortcut) == keyboard_type);
+static_assert(static_cast<int>(actions::ActionType::lua) == lua_type);
+static_assert(static_cast<int>(actions::MouseOperation::move) == 4);
+static_assert(static_cast<int>(actions::MouseButton::x_button_2) == 4);
+static_assert(static_cast<int>(actions::PositionTarget::absolute) == 3);
+static_assert(static_cast<int>(actions::WindowOperation::move) == 5);
+static_assert(static_cast<int>(actions::WindowOperation::resize) == 6);
+static_assert(static_cast<int>(actions::WindowOperation::move_resize) == 7);
+static_assert(static_cast<int>(actions::WindowOperation::center) == 9);
+static_assert(static_cast<int>(actions::WindowTarget::window_at_gesture_start) == 2);
+static_assert(static_cast<int>(actions::MediaOperation::stop) == 3);
+static_assert(static_cast<int>(actions::VolumeOperation::mute_toggle) == 2);
+static_assert(static_cast<int>(actions::VirtualDesktopOperation::close) == 3);
 
 void show(HWND window, int id, bool visible) {
   ::ShowWindow(::GetDlgItem(window, id), visible ? SW_SHOW : SW_HIDE);
@@ -76,6 +108,162 @@ std::optional<int> integer(HWND window, int id) {
   if (errno != 0 || end == text.c_str() || *end != '\0' || value < INT_MIN || value > INT_MAX)
     return std::nullopt;
   return static_cast<int>(value);
+}
+
+struct ApiEntry {
+  const wchar_t* group;
+  const wchar_t* signature;
+  const wchar_t* parameters;
+  const wchar_t* returns;
+  const wchar_t* description;
+};
+
+constexpr ApiEntry api_entries[] = {
+    {L"gesture", L"gesture.id, gesture.name, gesture.score", L"None.",
+     L"Strings for id and name, a number between 0 and 1 for score.",
+     L"Identifies the recognized gesture that ran this script."},
+    {L"gesture", L"gesture.start.x, gesture.start.y, gesture.finish.x, gesture.finish.y",
+     L"None.", L"Numbers in virtual-screen coordinates, which may be negative.",
+     L"Reports where the stroke began and where it ended."},
+    {L"gesture", L"gesture.duration, gesture.point_count, gesture.distance", L"None.",
+     L"Milliseconds, the captured point count, and the traveled distance in pixels.",
+     L"Describes the shape and timing of the stroke."},
+    {L"application",
+     L"application.process, application.process_id, application.title, application.class, "
+     L"application.executable_path",
+     L"None.",
+     L"Strings, except process_id which is a number; executable_path is absent when Windows "
+     L"denies the query.",
+     L"Describes the application captured when the gesture began. Both context objects are "
+     L"read-only, and both are absent when a script is run from Test."},
+    {L"window", L"window.close([target]), minimize, maximize, restore, activate",
+     L"target: \"gesture\" (default) or \"foreground\".",
+     L"true, or raises a Lua error when the window is unavailable or Windows refuses.",
+     L"Performs one lifecycle operation on the target window."},
+    {L"window", L"window.move(x, y [, target])",
+     L"x, y: virtual-screen coordinates. target: \"gesture\" (default) or \"foreground\".",
+     L"true, or raises a Lua error when the move fails.",
+     L"Moves the target window to the given desktop position."},
+    {L"window", L"window.resize(width, height [, target])",
+     L"width, height: positive pixel dimensions. target as above.",
+     L"true, or raises a Lua error; zero or negative dimensions are rejected.",
+     L"Resizes the target window without moving it."},
+    {L"window", L"window.move_resize(x, y, width, height [, target])",
+     L"Position and positive dimensions, then the optional target.",
+     L"true, or raises a Lua error when the operation fails.",
+     L"Moves and resizes the target window in one step."},
+    {L"window", L"window.bounds([target])", L"target as above.",
+     L"A read-only table with x, y, width and height.",
+     L"Reads the target window rectangle in virtual-screen coordinates."},
+    {L"window", L"window.exists([target])", L"target as above.", L"true or false.",
+     L"Reports whether the target window is still a live window."},
+    {L"window", L"window.title([target]), window.class([target]), window.process([target])",
+     L"target as above.",
+     L"A string, or raises a Lua error when the window or the value is unavailable.",
+     L"Reads window metadata live, rather than from the captured context."},
+    {L"keyboard", L"keyboard.hotkey(key, ...)",
+     L"One or more key names, such as \"CTRL\", \"SHIFT\", \"T\"; no name may contain + or ,.",
+     L"true, or raises a Lua error when a name is invalid or Windows refuses the input.",
+     L"Sends the keys as one chord and restores the modifiers you are physically holding."},
+    {L"keyboard", L"keyboard.press(key)", L"One key name; chords belong to keyboard.hotkey.",
+     L"true, or raises a Lua error when the name is invalid.",
+     L"Sends one key down and up without touching modifier state."},
+    {L"keyboard", L"keyboard.down(key), keyboard.up(key)", L"One key name.",
+     L"true, or raises a Lua error when the name is invalid.",
+     L"Sends a single key-down or key-up event, so a chord can be held across calls."},
+    {L"keyboard", L"keyboard.is_down(key)", L"One key name; modifiers are always supported.",
+     L"true or false, or raises a Lua error for an unknown key.",
+     L"Reports whether the key is physically held, ignoring injected input."},
+    {L"mouse", L"mouse.position()", L"None.", L"A read-only table with x and y.",
+     L"Reads the pointer position in virtual-screen coordinates."},
+    {L"mouse", L"mouse.move(x, y)", L"x, y: finite virtual-screen coordinates, possibly negative.",
+     L"true, or raises a Lua error when the coordinates are invalid.",
+     L"Moves the pointer to an absolute desktop position."},
+    {L"mouse", L"mouse.click(button), double_click(button), down(button), up(button)",
+     L"button: \"left\", \"right\", \"middle\", \"x1\" or \"x2\", in any case.",
+     L"true, or raises a Lua error for an unsupported button or unavailable cursor.",
+     L"Generates the button event at the current pointer position."},
+    {L"process", L"process.launch(path [, arguments [, working_directory]])",
+     L"path: the executable. arguments and working_directory are optional strings.",
+     L"true, or raises a Lua error carrying the Windows failure.",
+     L"Starts a program without waiting for it."},
+    {L"shell", L"shell.open(uri)", L"uri: a URL or registered URI, such as ms-settings:display.",
+     L"true, or raises a Lua error when no handler accepts it.",
+     L"Opens the target with its registered Windows handler."},
+    {L"media", L"media.play_pause(), media.next(), media.previous(), media.stop()", L"None.",
+     L"true, or raises a Lua error when the command is refused.",
+     L"Sends the system media command to the active player."},
+    {L"volume", L"volume.increase(amount), volume.decrease(amount)",
+     L"amount: greater than 0 and at most 100, on the same scale as volume.set.",
+     L"true, or raises a Lua error when no output endpoint is available.",
+     L"Changes the default output level by a relative amount."},
+    {L"volume", L"volume.toggle_mute(), volume.get(), volume.set(value), volume.is_muted()",
+     L"value: 0 to 100.",
+     L"get returns 0 to 100, is_muted returns true or false, the others return true.",
+     L"Reads and sets the default output level and mute state."},
+    {L"desktop", L"desktop.next(), desktop.previous(), desktop.create(), desktop.close()",
+     L"None.", L"true, or raises a Lua error when the operation is unsupported.",
+     L"Drives Windows virtual desktops with the system shortcuts."},
+    {L"ui", L"ui.message(text), ui.osd(text)", L"text: a non-empty string.",
+     L"true, or raises a Lua error when the message window is unavailable.",
+     L"Shows the text on screen and returns at once; both dismiss themselves."},
+    {L"log", L"log.debug(text), log.info(text), log.warn(text), log.error(text)",
+     L"text: the message to record.",
+     L"true, or raises a Lua error when the log cannot be written.",
+     L"Writes one structured record to the application log."},
+    {L"log", L"print(...)", L"Any values, converted with tostring.",
+     L"true, or raises a Lua error when the log cannot be written.",
+     L"Writes the values to the application log at info level; there is no console."},
+};
+
+std::wstring documentation() {
+  std::wstring text =
+      L"Strokes++ Lua API\r\n\r\nNamespaces: gesture, application, window, keyboard, mouse, "
+      L"process, shell, media, volume, desktop, ui, log.\r\n\r\nAutomation functions return "
+      L"true and raise a catchable Lua error on failure. Query functions return their "
+      L"documented value. Shared code is loaded from scripts\\init.lua in the configuration "
+      L"directory, and require loads modules from its scripts\\modules folder.\r\n";
+  const wchar_t* group = nullptr;
+  for (const auto& entry : api_entries) {
+    if (group == nullptr || ::lstrcmpW(group, entry.group) != 0) {
+      group = entry.group;
+      text += L"\r\n=== ";
+      text += group;
+      text += L" ===\r\n";
+    }
+    text += L"\r\n";
+    text += entry.signature;
+    text += L"\r\n    Parameters: ";
+    text += entry.parameters;
+    text += L"\r\n    Returns: ";
+    text += entry.returns;
+    text += L"\r\n    ";
+    text += entry.description;
+    text += L"\r\n";
+  }
+  return text;
+}
+
+LRESULT CALLBACK help_proc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
+  if (message == WM_NCCREATE)
+    ::SetWindowLongPtrW(
+        window, GWLP_USERDATA,
+        reinterpret_cast<LONG_PTR>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams));
+  if (message == WM_COMMAND &&
+      (LOWORD(wp) == help_close_id || LOWORD(wp) == IDOK || LOWORD(wp) == IDCANCEL)) {
+    ::DestroyWindow(window);
+    return 0;
+  }
+  if (message == WM_CLOSE) {
+    ::DestroyWindow(window);
+    return 0;
+  }
+  if (message == WM_DESTROY) {
+    if (auto* finished = reinterpret_cast<bool*>(::GetWindowLongPtrW(window, GWLP_USERDATA)))
+      *finished = true;
+    return 0;
+  }
+  return ::DefWindowProcW(window, message, wp, lp);
 }
 
 std::optional<double> number(HWND window, int id) {
@@ -250,19 +438,19 @@ void WindowsActionEditor::refresh(bool reset_choices) {
   bool first = false, second = false, third = false, fourth = false;
   bool lua_script = false;
   bool browse_file = false, browse_directory = false;
-  if (type == 0) {
+  if (type == keyboard_type) {
     first = true;
     label(window_, first_label_id, L"Shortcut");
-  } else if (type == 1) {
+  } else if (type == process_type) {
     operation = first = second = third = browse_file = browse_directory = true;
     if (reset_choices) reset_combo(window_, operation_id, {L"Launch"});
     label(window_, first_label_id, L"Executable");
     label(window_, second_label_id, L"Arguments");
     label(window_, third_label_id, L"Working directory");
-  } else if (type == 2) {
+  } else if (type == url_type) {
     first = true;
     label(window_, first_label_id, L"URL or URI");
-  } else if (type == 3) {
+  } else if (type == mouse_type) {
     operation = option = position = true;
     if (reset_choices) {
       reset_combo(window_, operation_id, {L"Click", L"Double click", L"Button down", L"Button up", L"Move"});
@@ -270,11 +458,12 @@ void WindowsActionEditor::refresh(bool reset_choices) {
       reset_combo(window_, position_id, {L"Current cursor", L"Gesture start", L"Gesture end", L"Absolute"});
     }
     label(window_, option_label_id, L"Mouse button");
-    option = selection(window_, operation_id) != 4;
-    first = second = selection(window_, position_id) == 3;
+    option = selection(window_, operation_id) != static_cast<int>(actions::MouseOperation::move);
+    first = second =
+        selection(window_, position_id) == static_cast<int>(actions::PositionTarget::absolute);
     label(window_, first_label_id, L"X coordinate");
     label(window_, second_label_id, L"Y coordinate");
-  } else if (type == 4) {
+  } else if (type == window_type) {
     operation = option = true;
     if (reset_choices) {
       reset_combo(window_, operation_id, {L"Close", L"Minimize", L"Maximize", L"Restore", L"Activate", L"Move", L"Resize", L"Move and resize", L"Maximize / Restore", L"Center"});
@@ -282,24 +471,29 @@ void WindowsActionEditor::refresh(bool reset_choices) {
     }
     label(window_, option_label_id, L"Window target");
     const int selected = selection(window_, operation_id);
-    first = second = selected == 5 || selected == 7;
-    third = fourth = selected == 6 || selected == 7;
+    const bool moves = selected == static_cast<int>(actions::WindowOperation::move) ||
+                       selected == static_cast<int>(actions::WindowOperation::move_resize);
+    const bool resizes = selected == static_cast<int>(actions::WindowOperation::resize) ||
+                         selected == static_cast<int>(actions::WindowOperation::move_resize);
+    first = second = moves;
+    third = fourth = resizes;
     label(window_, first_label_id, L"X coordinate");
     label(window_, second_label_id, L"Y coordinate");
     label(window_, third_label_id, L"Width");
     label(window_, fourth_label_id, L"Height");
-  } else if (type == 5) {
+  } else if (type == media_type) {
     operation = true;
     if (reset_choices) reset_combo(window_, operation_id, {L"Play / Pause", L"Next track", L"Previous track", L"Stop"});
-  } else if (type == 6) {
+  } else if (type == volume_type) {
     operation = true;
     if (reset_choices) reset_combo(window_, operation_id, {L"Increase", L"Decrease", L"Mute toggle"});
-    first = selection(window_, operation_id) != 2;
+    first = selection(window_, operation_id) !=
+            static_cast<int>(actions::VolumeOperation::mute_toggle);
     label(window_, first_label_id, L"Amount (optional %)");
-  } else if (type == 7) {
+  } else if (type == desktop_type) {
     operation = true;
     if (reset_choices) reset_combo(window_, operation_id, {L"Next desktop", L"Previous desktop", L"Create desktop", L"Close desktop"});
-  } else if (type == 8) {
+  } else if (type == lua_type) {
     lua_script = true;
   }
   show(window_, operation_label_id, operation); show(window_, operation_id, operation);
@@ -372,19 +566,19 @@ std::optional<actions::ActionDefinition> WindowsActionEditor::read() const {
   const int operation = selection(window_, operation_id);
   const int option = selection(window_, option_id);
   const int position = selection(window_, position_id);
-  if (type == 0)
+  if (type == keyboard_type)
     return actions::ActionDefinition::keyboard(detail::read_utf8(window_, first_id));
-  if (type == 1)
+  if (type == process_type)
     return actions::ActionDefinition{
         1, actions::ActionType::process,
         actions::ProcessParameters{actions::ProcessOperation::launch,
                                    detail::read_utf8(window_, first_id),
                                    detail::read_utf8(window_, second_id),
                                    detail::read_utf8(window_, third_id)}};
-  if (type == 2)
+  if (type == url_type)
     return actions::ActionDefinition{1, actions::ActionType::url,
                                      actions::UrlParameters{detail::read_utf8(window_, first_id)}};
-  if (type == 3 && operation >= 0 && position >= 0) {
+  if (type == mouse_type && operation >= 0 && position >= 0) {
     actions::PositionDefinition target{static_cast<actions::PositionTarget>(position), std::nullopt};
     if (target.target == actions::PositionTarget::absolute) {
       const auto x = number(window_, first_id), y = number(window_, second_id);
@@ -400,26 +594,28 @@ std::optional<actions::ActionDefinition> WindowsActionEditor::read() const {
         1, actions::ActionType::mouse,
         actions::MouseParameters{static_cast<actions::MouseOperation>(operation), button, target}};
   }
-  if (type == 4 && operation >= 0 && option >= 0) {
+  if (type == window_type && operation >= 0 && option >= 0) {
     actions::WindowParameters parameters{static_cast<actions::WindowOperation>(operation),
                                          static_cast<actions::WindowTarget>(option)};
-    if (operation == 5 || operation == 7) {
+    if (operation == static_cast<int>(actions::WindowOperation::move) ||
+        operation == static_cast<int>(actions::WindowOperation::move_resize)) {
       parameters.x = integer(window_, first_id);
       parameters.y = integer(window_, second_id);
       if (!parameters.x || !parameters.y) return std::nullopt;
     }
-    if (operation == 6 || operation == 7) {
+    if (operation == static_cast<int>(actions::WindowOperation::resize) ||
+        operation == static_cast<int>(actions::WindowOperation::move_resize)) {
       parameters.width = integer(window_, third_id);
       parameters.height = integer(window_, fourth_id);
       if (!parameters.width || !parameters.height) return std::nullopt;
     }
     return actions::ActionDefinition{1, actions::ActionType::window, parameters};
   }
-  if (type == 5 && operation >= 0)
+  if (type == media_type && operation >= 0)
     return actions::ActionDefinition{1, actions::ActionType::media,
                                      actions::MediaParameters{
                                          static_cast<actions::MediaOperation>(operation)}};
-  if (type == 6 && operation >= 0) {
+  if (type == volume_type && operation >= 0) {
     std::optional<double> amount;
     if (operation != static_cast<int>(actions::VolumeOperation::mute_toggle)) {
       const auto text = detail::read_utf8(window_, first_id);
@@ -432,12 +628,12 @@ std::optional<actions::ActionDefinition> WindowsActionEditor::read() const {
         1, actions::ActionType::volume,
         actions::VolumeParameters{static_cast<actions::VolumeOperation>(operation), amount}};
   }
-  if (type == 7 && operation >= 0)
+  if (type == desktop_type && operation >= 0)
     return actions::ActionDefinition{
         1, actions::ActionType::virtual_desktop,
         actions::VirtualDesktopParameters{
             static_cast<actions::VirtualDesktopOperation>(operation)}};
-  if (type == 8)
+  if (type == lua_type)
     return actions::ActionDefinition::lua(detail::read_utf8(window_, lua_script_id));
   return std::nullopt;
 }
@@ -477,7 +673,24 @@ void WindowsActionEditor::validate_lua() {
 
 void WindowsActionEditor::test_lua() {
   actions::LuaRuntime runtime;
-  const auto result = runtime.execute(detail::read_utf8(window_, lua_script_id), {});
+  if (lua_environment != nullptr) {
+    runtime.set_services(lua_environment->services);
+    if (!lua_environment->module_directory.empty())
+      runtime.set_module_directory(lua_environment->module_directory);
+    if (const auto initialized = runtime.initialize(lua_environment->initialization_script);
+        !initialized.success) {
+      ::MessageBoxW(
+          window_,
+          detail::wide("The shared initialization script failed: " + initialized.message).c_str(),
+          L"Lua Test Failed", MB_OK | MB_ICONERROR);
+      return;
+    }
+  }
+  // A tested script was not produced by a gesture, so it runs against the real automation
+  // services with no gesture and no application context.
+  actions::ActionContext context;
+  context.captured = false;
+  const auto result = runtime.execute(detail::read_utf8(window_, lua_script_id), context);
   ::MessageBoxW(window_,
                 detail::wide(result.success ? "Lua script completed successfully."
                                             : result.message)
@@ -487,23 +700,53 @@ void WindowsActionEditor::test_lua() {
 }
 
 void WindowsActionEditor::show_lua_help() {
-  constexpr wchar_t help[] =
-      L"Namespaces: gesture, application, window, keyboard, mouse, process, shell, media, "
-      L"volume, desktop, ui, log\n\n"
-      L"Functions return true on success or raise a catchable Lua error. Queries return their "
-      L"documented value.\n\n"
-      L"keyboard.hotkey(key, ...), press(key), down(key), up(key), is_down(key)\n"
-      L"mouse.position(), move(x, y), click(button), double_click(button), down(button), "
-      L"up(button)\n"
-      L"window.close([target]), minimize, maximize, restore, activate, move(x,y,[target]), "
-      L"resize(w,h,[target]), move_resize(x,y,w,h,[target]), bounds, exists, title, class, process\n"
-      L"process.launch(path [, arguments [, working_directory]]); shell.open(uri)\n"
-      L"media.play_pause(), next(), previous(), stop()\n"
-      L"volume.increase(amount), decrease(amount), toggle_mute(), get(), set(value), is_muted()\n"
-      L"desktop.next(), previous(), create(), close()\n"
-      L"ui.message(text), ui.osd(text)\n"
-      L"log.debug(text), info(text), warn(text), error(text)";
-  ::MessageBoxW(window_, help, L"Lua API Help", MB_OK | MB_ICONINFORMATION);
+  constexpr wchar_t help_class[] = L"StrokesPlusPlusApiHelp";
+  WNDCLASSEXW description{sizeof(description)};
+  description.lpfnWndProc = help_proc;
+  description.hInstance = instance_;
+  description.lpszClassName = help_class;
+  description.hCursor = ::LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
+  description.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+  const ATOM registered = ::RegisterClassExW(&description);
+  if (registered == 0 && ::GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return;
+  const auto scale = [this](int value) { return ::MulDiv(value, static_cast<int>(dpi_), 96); };
+  bool finished = false;
+  HWND help = ::CreateWindowExW(WS_EX_DLGMODALFRAME, help_class, L"Lua API Help",
+                                WS_CAPTION | WS_SYSMENU | WS_POPUP, CW_USEDEFAULT, CW_USEDEFAULT,
+                                scale(640), scale(540), window_, nullptr, instance_, &finished);
+  if (help == nullptr) {
+    if (registered != 0) ::UnregisterClassW(help_class, instance_);
+    return;
+  }
+  const auto text = documentation();
+  (void)::CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", text.c_str(),
+                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | ES_MULTILINE |
+                              ES_READONLY | ES_AUTOVSCROLL,
+                          scale(12), scale(12), scale(600), scale(440), help,
+                          reinterpret_cast<HMENU>(static_cast<INT_PTR>(help_text_id)), instance_,
+                          nullptr);
+  (void)::CreateWindowExW(0, L"BUTTON", L"Close",
+                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, scale(524),
+                          scale(464), scale(88), scale(28), help,
+                          reinterpret_cast<HMENU>(static_cast<INT_PTR>(help_close_id)), instance_,
+                          nullptr);
+  ::EnumChildWindows(help, [](HWND child, LPARAM font) -> BOOL {
+    ::SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(font), TRUE);
+    return TRUE;
+  }, reinterpret_cast<LPARAM>(::GetStockObject(DEFAULT_GUI_FONT)));
+  ::EnableWindow(window_, FALSE);
+  ::ShowWindow(help, SW_SHOW);
+  ::SetFocus(::GetDlgItem(help, help_text_id));
+  MSG message{};
+  while (!finished && ::GetMessageW(&message, nullptr, 0, 0) > 0) {
+    if (!::IsDialogMessageW(help, &message)) {
+      ::TranslateMessage(&message);
+      ::DispatchMessageW(&message);
+    }
+  }
+  ::EnableWindow(window_, TRUE);
+  ::SetForegroundWindow(window_);
+  if (registered != 0) ::UnregisterClassW(help_class, instance_);
 }
 
 void WindowsActionEditor::rescale_children(UINT old_dpi, UINT new_dpi) noexcept {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -53,6 +54,15 @@ class GestureEngine {
   ~GestureEngine();
 
   [[nodiscard]] EngineUpdate process(const input::MouseInputEvent& event);
+  /// Interrupts a running script and refuses later ones, before the engine is destroyed.
+  ///
+  /// Safe to call from another thread while the engine thread is executing an action.
+  void stop() noexcept;
+  /// Rebuilds the Lua runtime and reruns shared initialization code.
+  ///
+  /// Args:
+  ///   initialization_script: The current contents of the user initialization script.
+  [[nodiscard]] actions::ActionResult reload_scripts(std::string_view initialization_script);
   [[nodiscard]] input::GestureState state() const noexcept { return state_machine_.state(); }
   [[nodiscard]] const std::optional<input::GestureSession>& session() const noexcept {
     return state_machine_.session();
@@ -72,7 +82,10 @@ class GestureEngine {
   const input::IModifierStateProvider& modifier_state_;
   input::IMouseClick& mouse_click_;
   actions::KeyboardService keyboard_service_;
-  actions::LuaRuntime lua_runtime_;
+  // Bounds one script; long enough for ordinary automation, short enough that a runaway
+  // script cannot hold the action worker for a noticeable time.
+  static constexpr std::chrono::milliseconds lua_execution_limit{1000};
+  actions::LuaRuntime lua_runtime_{lua_execution_limit};
   actions::ActionServices services_;
   std::unique_ptr<actions::ActionExecutor> action_executor_;
   input::GestureStateMachine state_machine_;

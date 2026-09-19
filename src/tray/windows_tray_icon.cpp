@@ -12,7 +12,8 @@ constexpr wchar_t class_name[] = L"StrokesPlusPlusTrayWindow";
 constexpr UINT callback_message = WM_APP + 1;
 constexpr UINT icon_id = 1;
 constexpr UINT retry_timer_id = 1;
-constexpr UINT enable_id = 1001, disable_id = 1002, settings_id = 1003, exit_id = 1004;
+constexpr UINT enable_id = 1001, disable_id = 1002, settings_id = 1003, exit_id = 1004,
+               reload_id = 1005;
 
 HICON load_logo(HINSTANCE instance, bool& owned) noexcept {
   HICON icon = static_cast<HICON>(::LoadImageW(
@@ -181,6 +182,9 @@ LRESULT WindowsTrayIcon::handle_message(UINT message, WPARAM wp, LPARAM lp) {
       case settings_id:
         handler_(TrayCommand::settings, context_);
         break;
+      case reload_id:
+        handler_(TrayCommand::reload_scripts, context_);
+        break;
       case exit_id:
         remove_icon();
         handler_(TrayCommand::exit, context_);
@@ -228,6 +232,7 @@ void WindowsTrayIcon::show_menu() noexcept {
   ::AppendMenuW(menu, MF_STRING | (!enabled_ ? MF_GRAYED : 0), disable_id, L"Disable Gestures");
   ::AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   ::AppendMenuW(menu, MF_STRING, settings_id, L"Settings");
+  ::AppendMenuW(menu, MF_STRING, reload_id, L"Reload Lua Scripts");
   ::AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   ::AppendMenuW(menu, MF_STRING, exit_id, L"Exit");
   POINT cursor{};
@@ -247,6 +252,9 @@ void WindowsTrayIcon::show_menu() noexcept {
       break;
     case settings_id:
       handler_(TrayCommand::settings, context_);
+      break;
+    case reload_id:
+      handler_(TrayCommand::reload_scripts, context_);
       break;
     case exit_id:
       remove_icon();

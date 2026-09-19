@@ -627,8 +627,13 @@ void lua_runtime_tests() {
   check(!runtime.execute("require('missing')", context).success,
         "requiring a missing user module reports a Lua error");
   check(!runtime.execute("require('../outside')", context).success &&
-            !runtime.execute("require('folder\\outside')", context).success,
-        "the supported module loader rejects paths outside the approved module directory");
+            !runtime.execute("require([[folder\\outside]])", context).success &&
+            !runtime.execute("require('folder/outside')", context).success &&
+            !runtime.execute("require([[C:\\modules\\outside]])", context).success &&
+            !runtime.execute("require('.shared')", context).success &&
+            !runtime.execute("require('shared.')", context).success &&
+            !runtime.execute("require('shared..extra')", context).success,
+        "the supported module loader rejects every name outside the approved module directory");
   check(runtime.execute("runtime_only_value = 99", context).success,
         "runtime-only state can be created before reload");
   {
@@ -652,9 +657,18 @@ void lua_runtime_tests() {
         "runtime-only globals do not persist across application runtime instances");
   check(runtime.execute("return keyboard.hotkey('CTRL', 'W')", context).success &&
             runtime.execute("return keyboard.hotkey('CTRL', 'SHIFT', 'T')", context).success &&
-            runtime.execute("return keyboard.press('F5')", context).success &&
-            keyboard.shortcuts == std::vector<std::string>{"CTRL+W", "CTRL+SHIFT+T", "F5"},
-        "Lua hotkey and press calls reuse the keyboard shortcut service");
+            keyboard.shortcuts == std::vector<std::string>{"CTRL+W", "CTRL+SHIFT+T"},
+        "Lua hotkey calls reuse the keyboard shortcut service");
+  check(runtime.execute("return keyboard.press('F5')", context).success &&
+            keyboard.events ==
+                std::vector<std::pair<std::string, bool>>{{"F5", true}, {"F5", false}} &&
+            keyboard.shortcuts.size() == 2,
+        "Lua press sends one key down and up instead of a shortcut sequence");
+  check(!runtime.execute("keyboard.press('ALT+SPACE,N')", context).success &&
+            !runtime.execute("keyboard.hotkey('CTRL', 'W,X')", context).success &&
+            keyboard.shortcuts.size() == 2,
+        "Lua keyboard bindings reject chords and sequences where one key is required");
+  keyboard.events.clear();
   check(runtime.execute("keyboard.down('CTRL'); keyboard.up('CTRL')", context).success &&
             keyboard.events ==
                 std::vector<std::pair<std::string, bool>>{{"CTRL", true}, {"CTRL", false}},
@@ -662,7 +676,7 @@ void lua_runtime_tests() {
   check(runtime.execute("return keyboard.is_down('SHIFT')", context).success,
         "Lua can observe a physically pressed modifier");
   keyboard.shift_down = false;
-  check(!runtime.execute("return keyboard.is_down('SHIFT')", context).success,
+  check(runtime.execute("return keyboard.is_down('SHIFT') == false", context).success,
         "Lua observes a released modifier as false");
   check(!runtime.execute("keyboard.press('NOT_A_KEY')", context).success &&
             !runtime.execute("keyboard.hotkey('CTRL', 7)", context).success,
@@ -831,10 +845,28 @@ void lua_runtime_tests() {
             context.application.executable_name == "chrome.exe" &&
             context.gesture.start_position.x == -20,
         "Lua context objects and nested positions reject writes without mutating C++ state");
-  const auto filesystem_access =
-      runtime.execute("return dofile ~= nil or loadfile ~= nil", context);
-  check(!filesystem_access.success,
-        "the supported Lua environment does not expose file-loading base functions");
+  check(runtime
+            .execute("return dofile == nil and loadfile == nil and os == nil and io == nil and "
+                     "package == nil and rawset == nil and rawget == nil and rawequal == nil and "
+                     "rawlen == nil",
+                     context)
+            .success,
+        "the supported Lua environment exposes no file, package or raw-access functions");
+  check(!runtime.execute("rawset(gesture, 'name', 'fake')", context).success &&
+            runtime.execute("return gesture.name == 'Right'", context).success,
+        "the read-only context cannot be rewritten through a raw accessor");
+  automation.fail_diagnostics = false;
+  automation.diagnostics.clear();
+  check(runtime.execute("print('one', 2)", context).success &&
+            automation.diagnostics ==
+                std::vector<std::pair<std::string, std::string>>{{"info", "one\t2"}},
+        "print writes to the application log instead of an absent console");
+
+  ActionContext uncaptured;
+  uncaptured.captured = false;
+  check(runtime.execute("return gesture == nil and application == nil", uncaptured).success &&
+            !runtime.execute("return gesture.start.x", uncaptured).success,
+        "a script that no gesture produced sees no gesture or application values");
 }
 
 void lua_execution_limit_tests() {
@@ -860,6 +892,12 @@ void lua_execution_limit_tests() {
   const auto cancelled = running.get();
   check(!cancelled.success && cancelled.message.find("execution cancelled") != std::string::npos,
         "an executing Lua script responds to shutdown cancellation");
+
+  const auto after_cancel = cancellable.execute("return true", context);
+  check(!after_cancel.success && after_cancel.code == "lua_cancelled",
+        "a cancelled runtime refuses later scripts instead of clearing the request");
+  check(cancellable.reload({}).success && cancellable.execute("return true", context).success,
+        "reloading the runtime clears the cancellation");
 }
 
 void display_name_tests() {

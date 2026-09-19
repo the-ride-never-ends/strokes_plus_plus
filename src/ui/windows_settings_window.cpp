@@ -383,7 +383,8 @@ void WindowsSettingsWindow::load_help() const noexcept {
       L"An optional action used when no matching application profile overrides it. Add / Edit "
       L"Action opens "
       L"the action editor, where you can choose a keyboard shortcut, program, URI, mouse, window, "
-      L"media, volume, or virtual-desktop action. Removing an action does not remove the pattern.");
+      L"media, volume, virtual-desktop, or Lua script action. Removing an action does not remove "
+      L"the pattern.");
   row(L"Assigned action",
       L"Shows the action's actual details, such as Ctrl+C, rather than only its action type. The "
       L"list at left uses shorter task labels such as Copy, Minimize, or Next Track.");
@@ -434,6 +435,29 @@ void WindowsSettingsWindow::load_help() const noexcept {
   row(L"Action assignments",
       L"Assign global behavior on the Global Actions tab and application-specific overrides on the "
       L"Applications tab. A pattern does not need an assignment to remain in this inventory.");
+  section(L"Lua scripting");
+  row(L"Lua Script action",
+      L"Choose Lua Script in the action editor to write a script instead of picking a built-in "
+      L"action. Scripts can branch on the gesture, the target application, and live keyboard "
+      L"state, and they call the same automation the built-in actions use.");
+  row(L"Validate and Test",
+      L"Validate reports syntax errors without running the script. Test runs it immediately "
+      L"against the real automation services, so it can move windows and send input. A tested "
+      L"script was not produced by a gesture, so the gesture and application values are absent "
+      L"and window actions report that the target is unavailable.");
+  row(L"API Help",
+      L"Lists every namespace and function with its parameters, return value, and description. "
+      L"Automation functions return true and raise a catchable Lua error on failure.");
+  row(L"Shared scripts",
+      L"Functions defined in scripts\\init.lua, in the Strokes++ configuration folder under "
+      L"Local AppData, are available to every Lua action. Modules placed in its scripts\\modules "
+      L"folder load with require(\"name\").");
+  row(L"Reload Lua Scripts",
+      L"The notification-area menu reloads the initialization script and cached modules without "
+      L"restarting Strokes++. Reloading clears values scripts stored in Lua globals.");
+  row(L"Execution limits",
+      L"A script that runs too long is interrupted and reported as a failed action, and a failed "
+      L"script never disables gestures.");
   section(L"Saving changes");
   row(L"Save", L"Applies all changes and closes Settings.");
   row(L"Cancel", L"Closes Settings without applying the current changes.");

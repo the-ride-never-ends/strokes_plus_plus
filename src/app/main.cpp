@@ -22,6 +22,7 @@
 #include "logging/structured_logger.h"
 #include "overlay/windows_gesture_overlay.h"
 #include "tray/windows_tray_icon.h"
+#include "ui/lua_editor_environment.h"
 #include "ui/windows_settings_window.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -100,12 +101,7 @@ class EngineHost {
     // Disabling is a per-run convenience; every new process starts enabled.
     configuration_.global.gestures_enabled = true;
     (void)logger_->log("configuration_load", {{"used_defaults", !loaded}});
-    const auto lua_initialization_path = configuration_directory_ / "scripts" / "init.lua";
-    std::ifstream lua_initialization_file(lua_initialization_path, std::ios::binary);
-    if (lua_initialization_file) {
-      lua_initialization_script_.assign(std::istreambuf_iterator<char>(lua_initialization_file),
-                                        std::istreambuf_iterator<char>());
-    }
+    prepare_scripts();
     recognizer_.set_threshold(configuration_.global.recognition_threshold);
     for (const auto& gesture : configuration_.gestures.gestures) {
       (void)recognizer_.add_gesture(gesture);
@@ -224,6 +220,7 @@ class EngineHost {
     tray_.destroy();
     worker_.request_stop();
     events_.wake();
+    stop_engine();
     worker_.join();
     events_.clear();
     save_worker_.request_stop();
@@ -241,6 +238,54 @@ class EngineHost {
       return false;
     }
     return events_.push(event);
+  }
+
+  /// Creates the user script folders, and a commented initialization script on first run.
+  void prepare_scripts() noexcept {
+    std::error_code error;
+    const auto scripts = configuration_directory_ / "scripts";
+    std::filesystem::create_directories(scripts / "modules", error);
+    if (error) return;
+    const auto initialization = scripts / "init.lua";
+    if (std::filesystem::exists(initialization, error) || error) return;
+    std::ofstream file(initialization, std::ios::binary);
+    if (!file) return;
+    file << "-- Strokes++ shared Lua initialization.\n"
+            "-- Values and functions defined here are available to every Lua gesture action,\n"
+            "-- and modules placed in the modules folder beside this file load with require.\n"
+            "-- Reload Lua Scripts in the notification-area menu applies changes.\n"
+            "--\n"
+            "-- function close_tab()\n"
+            "--     keyboard.hotkey(\"CTRL\", \"W\")\n"
+            "-- end\n";
+  }
+
+  /// Reads the user initialization script, empty when the user has not written one.
+  [[nodiscard]] std::string initialization_script() const {
+    std::ifstream file(configuration_directory_ / "scripts" / "init.lua", std::ios::binary);
+    if (!file) return {};
+    return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+  }
+
+  /// Interrupts a running script so the engine worker can be joined promptly.
+  void stop_engine() noexcept {
+    std::scoped_lock lock(engine_mutex_);
+    if (active_engine_ != nullptr) active_engine_->stop();
+  }
+
+  /// Rebuilds the Lua runtime from the current user scripts and reports the outcome.
+  void reload_scripts() {
+    std::string report = "Gesture processing is paused; scripts load when it resumes.";
+    {
+      std::scoped_lock lock(engine_mutex_);
+      if (active_engine_ != nullptr) {
+        const auto result = active_engine_->reload_scripts(initialization_script());
+        report = result.success ? std::string("Lua scripts reloaded.")
+                                : "Lua reload failed: " + result.message;
+      }
+    }
+    if (logger_) (void)logger_->log("lua_reload", {{"message", report}});
+    (void)user_feedback_service_.message(report);
   }
 
   void refresh_scale(HWND window) noexcept {
@@ -317,6 +362,8 @@ class EngineHost {
         host.tray_.set_enabled(false);
         host.configuration_.global.gestures_enabled = false;
         host.save_configuration();
+      } else if (command == tray::TrayCommand::reload_scripts) {
+        host.reload_scripts();
       } else if (command == tray::TrayCommand::settings) {
         host.open_settings();
       } else if (command == tray::TrayCommand::suspend) {
@@ -413,13 +460,30 @@ class EngineHost {
       router_.set_enabled(false);
       worker_.request_stop();
       events_.wake();
+      stop_engine();
       worker_.join();
       events_.clear();
       overlay_.hide();
       flush_saves();
 
+      // The engine worker is stopped, so the editor may drive the same services to test
+      // scripts, with the shared initialization code the next engine will run.
+      const ui::LuaEditorEnvironment editor_environment{
+          actions::ActionServices{.keyboard = &editor_keyboard_,
+                                  .process = &process_service_,
+                                  .shell = &shell_service_,
+                                  .mouse = &mouse_service_,
+                                  .window = &window_service_,
+                                  .media = &media_service_,
+                                  .audio = &audio_service_,
+                                  .virtual_desktop = &desktop_service_,
+                                  .diagnostics = logger_.get(),
+                                  .user_feedback = &user_feedback_service_},
+          configuration_directory_ / "scripts" / "modules", initialization_script()};
+      ui::lua_environment = &editor_environment;
       ui::WindowsSettingsWindow settings;
       const bool accepted = settings.show(instance_, configuration_);
+      ui::lua_environment = nullptr;
       if (logger_) (void)logger_->log("settings_closed", {{"accepted", accepted}});
       if (accepted) {
         std::string error;
@@ -444,11 +508,13 @@ class EngineHost {
       tray_.set_enabled(configuration_.global.gestures_enabled);
       restart_engine();
     } catch (const std::exception& exception) {
+      ui::lua_environment = nullptr;
       if (logger_) (void)logger_->log("settings_error", {{"message", exception.what()}});
       ::MessageBoxW(nullptr, L"Settings could not be applied.", L"Strokes++", MB_OK | MB_ICONERROR);
       router_.set_enabled(configuration_.global.gestures_enabled);
       restart_engine();
     } catch (...) {
+      ui::lua_environment = nullptr;
       if (logger_) (void)logger_->log("settings_error");
       ::MessageBoxW(nullptr, L"Settings could not be applied.", L"Strokes++", MB_OK | MB_ICONERROR);
       router_.set_enabled(configuration_.global.gestures_enabled);
@@ -478,7 +544,11 @@ class EngineHost {
                                 .virtual_desktop = &desktop_service_,
                                 .diagnostics = logger_.get(),
                                 .user_feedback = &user_feedback_service_},
-        lua_initialization_script_, configuration_directory_ / "scripts" / "modules");
+        initialization_script(), configuration_directory_ / "scripts" / "modules");
+    {
+      std::scoped_lock lock(engine_mutex_);
+      active_engine_ = &engine;
+    }
 
     while (!stop.stop_requested()) {
       const auto event = events_.wait_pop();
@@ -496,6 +566,10 @@ class EngineHost {
           if (logger_) (void)logger_->log("engine_error");
         }
       }
+    }
+    {
+      std::scoped_lock lock(engine_mutex_);
+      active_engine_ = nullptr;
     }
     // Input already accepted before shutdown is stale and must not delay exit
     // or be replayed when the settings window restarts this worker.
@@ -562,7 +636,6 @@ class EngineHost {
 
   config::ConfigurationBundle configuration_{config::ConfigurationStore::defaults()};
   std::filesystem::path configuration_directory_;
-  std::string lua_initialization_script_;
   HINSTANCE instance_{};
   std::unique_ptr<logging::StructuredLogger> logger_;
   bool ready_{true};
@@ -580,6 +653,7 @@ class EngineHost {
   input::WindowsMouseClick mouse_click_;
   actions::PhysicalKeyState physical_keys_;
   actions::WindowsKeyboardInput keyboard_input_{physical_keys_};
+  actions::KeyboardService editor_keyboard_{keyboard_input_};
   actions::WindowsProcessService process_service_;
   actions::WindowsShellService shell_service_;
   actions::WindowsMouseService mouse_service_;
@@ -598,6 +672,8 @@ class EngineHost {
   input::WindowsKeyboardHook keyboard_hook_;
   overlay::WindowsGestureOverlay overlay_;
   tray::WindowsTrayIcon tray_;
+  std::mutex engine_mutex_;
+  engine::GestureEngine* active_engine_{};
   std::jthread worker_;
   std::jthread save_worker_;
 };

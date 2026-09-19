@@ -82,14 +82,19 @@ std::optional<LRESULT> selected_combo(HWND window, int id, LRESULT count) {
 }
 
 std::string read_utf8(HWND window, int id) {
-  const int length = ::GetWindowTextLengthW(::GetDlgItem(window, id));
-  if (length == 0) return {};
-  std::wstring value(static_cast<std::size_t>(length) + 1, L'\0');
-  ::GetDlgItemTextW(window, id, value.data(), length + 1);
+  // A rich edit control answers WM_GETTEXTLENGTH with an estimate that counts each line
+  // break as a CRLF pair while returning lone carriage returns, so the reported length
+  // can exceed the text. Only the count the copy reports describes what was written.
+  const int capacity = ::GetWindowTextLengthW(::GetDlgItem(window, id));
+  if (capacity <= 0) return {};
+  std::wstring value(static_cast<std::size_t>(capacity) + 1, L'\0');
+  const int copied = ::GetDlgItemTextW(window, id, value.data(), capacity + 1);
+  if (copied <= 0) return {};
   const int needed =
-      ::WideCharToMultiByte(CP_UTF8, 0, value.data(), length, nullptr, 0, nullptr, nullptr);
+      ::WideCharToMultiByte(CP_UTF8, 0, value.data(), copied, nullptr, 0, nullptr, nullptr);
+  if (needed <= 0) return {};
   std::string result(static_cast<std::size_t>(needed), '\0');
-  ::WideCharToMultiByte(CP_UTF8, 0, value.data(), length, result.data(), needed, nullptr, nullptr);
+  ::WideCharToMultiByte(CP_UTF8, 0, value.data(), copied, result.data(), needed, nullptr, nullptr);
   return result;
 }
 

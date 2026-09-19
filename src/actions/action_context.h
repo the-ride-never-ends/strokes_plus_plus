@@ -12,6 +12,9 @@ namespace strokes::actions {
 
 /// Immutable runtime values captured for, or resolved immediately before, an action.
 struct ActionContext {
+  /// False when no gesture produced this context, such as a script tested from the
+  /// settings editor. Scripts then see no gesture and no application values at all.
+  bool captured{true};
   input::GestureSession gesture;
   context::ApplicationContext application;
   std::optional<gestures::RecognitionResult> recognition;

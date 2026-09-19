@@ -6,7 +6,16 @@
 #include <optional>
 
 namespace strokes::tray {
-enum class TrayCommand { toggle, enable, disable, settings, suspend, resume, exit };
+enum class TrayCommand {
+  toggle,
+  enable,
+  disable,
+  settings,
+  reload_scripts,
+  suspend,
+  resume,
+  exit
+};
 enum class TrayClick { show_menu, toggle };
 
 /// Owns the notification-area icon and dispatches lifecycle commands.

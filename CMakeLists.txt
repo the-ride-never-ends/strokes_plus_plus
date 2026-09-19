@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(strokes_plus_plus VERSION 0.8.0 LANGUAGES C CXX)
+project(strokes_plus_plus VERSION 0.10.0 LANGUAGES C CXX)
 
 option(STROKES_BUILD_TESTS "Build the unit tests" ON)
 
@@ -13,8 +13,16 @@ FetchContent_Declare(lua
 FetchContent_MakeAvailable(lua)
 file(GLOB LUA_SOURCES CONFIGURE_DEPENDS "${lua_SOURCE_DIR}/src/*.c")
 list(REMOVE_ITEM LUA_SOURCES "${lua_SOURCE_DIR}/src/lua.c" "${lua_SOURCE_DIR}/src/luac.c")
+# Lua is built as C++ so that LUAI_THROW raises a C++ exception instead of calling
+# longjmp. Errors raised by the bindings in src/actions/lua_runtime.cpp unwind C++
+# frames that own strings, paths and streams, and longjmp would not destroy them.
+set_source_files_properties(${LUA_SOURCES} PROPERTIES LANGUAGE CXX)
 add_library(lua54 STATIC ${LUA_SOURCES})
 target_include_directories(lua54 PUBLIC "${lua_SOURCE_DIR}/src")
+target_compile_features(lua54 PUBLIC cxx_std_20)
+if(MSVC)
+    target_compile_options(lua54 PRIVATE /EHsc /FS)
+endif()
 
 add_library(strokes_core
     src/actions/action_definition.cpp

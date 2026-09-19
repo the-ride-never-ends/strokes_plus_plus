@@ -28,10 +28,11 @@ GestureEngine::GestureEngine(gestures::Recognizer& recognizer,
   services_.keyboard = &keyboard_service_;
   lua_runtime_.set_services(services_);
   if (!lua_module_directory.empty()) lua_runtime_.set_module_directory(lua_module_directory);
-  const auto initialized = lua_runtime_.initialize(lua_initialization_script);
-  if (!initialized.success && services_.diagnostics) {
-    (void)services_.diagnostics->write("error",
-                                       "Lua initialization failed: " + initialized.message);
+  if (const auto initialized = lua_runtime_.initialize(lua_initialization_script);
+      !initialized.success) {
+    const auto report = "Lua initialization failed: " + initialized.message;
+    if (services_.diagnostics) (void)services_.diagnostics->write("error", report);
+    if (services_.user_feedback) (void)services_.user_feedback->message(report);
   }
   if (!services_.lua) services_.lua = &lua_runtime_;
   action_executor_ = std::make_unique<actions::ActionExecutor>(services_);
@@ -46,6 +47,12 @@ GestureEngine::~GestureEngine() {
     (void)state_machine_.cancel();
     (void)state_machine_.cancellation_finished();
   }
+}
+
+void GestureEngine::stop() noexcept { lua_runtime_.request_cancel(); }
+
+actions::ActionResult GestureEngine::reload_scripts(std::string_view initialization_script) {
+  return lua_runtime_.reload(initialization_script);
 }
 
 EngineUpdate GestureEngine::process(const input::MouseInputEvent& event) {

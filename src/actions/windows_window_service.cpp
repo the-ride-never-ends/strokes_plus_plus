@@ -18,6 +18,11 @@ ActionResult failed(std::string code, std::string message) {
   return ActionResult::failed(ActionError::platform_failure, std::move(code), std::move(message));
 }
 
+std::optional<context::ApplicationContext> capture(std::uintptr_t window) {
+  const context::WindowsApplicationContextProvider provider;
+  return provider.window_application(window);
+}
+
 }  // namespace
 
 std::optional<IWindowService::Bounds> WindowsWindowService::bounds(std::uintptr_t window) const {
@@ -32,20 +37,17 @@ bool WindowsWindowService::exists(std::uintptr_t window) const {
 }
 
 std::optional<std::string> WindowsWindowService::title(std::uintptr_t window) const {
-  const context::WindowsApplicationContextProvider provider;
-  const auto application = provider.window_application(window);
+  const auto application = capture(window);
   return application ? std::optional{application->window_title} : std::nullopt;
 }
 
 std::optional<std::string> WindowsWindowService::class_name(std::uintptr_t window) const {
-  const context::WindowsApplicationContextProvider provider;
-  const auto application = provider.window_application(window);
+  const auto application = capture(window);
   return application ? std::optional{application->window_class} : std::nullopt;
 }
 
 std::optional<std::string> WindowsWindowService::process_name(std::uintptr_t window) const {
-  const context::WindowsApplicationContextProvider provider;
-  const auto application = provider.window_application(window);
+  const auto application = capture(window);
   return application ? std::optional{application->executable_name} : std::nullopt;
 }
 
