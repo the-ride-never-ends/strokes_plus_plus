@@ -37,6 +37,11 @@ else()
 endif()
 
 if(WIN32)
+    configure_file(
+        resources/strokes_plus_plus.rc.in
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/strokes_plus_plus.rc
+        @ONLY
+    )
     add_library(strokes_windows
         src/actions/windows_keyboard_input.cpp
         src/actions/windows_audio_service.cpp
@@ -72,12 +77,21 @@ if(WIN32)
 
     add_executable(StrokesPlusPlus WIN32
         src/app/main.cpp
-        resources/strokes_plus_plus.rc
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/strokes_plus_plus.rc
     )
     target_link_libraries(StrokesPlusPlus PRIVATE strokes_windows psapi)
     target_compile_features(StrokesPlusPlus PRIVATE cxx_std_20)
     if(MSVC)
         target_compile_options(StrokesPlusPlus PRIVATE /W4 /permissive- /EHsc)
+    endif()
+
+    install(TARGETS StrokesPlusPlus RUNTIME DESTINATION . COMPONENT Application)
+    install(FILES LICENSE README.md DESTINATION . COMPONENT Application)
+
+    if(MSVC)
+        set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
+        set(CMAKE_INSTALL_SYSTEM_RUNTIME_COMPONENT Application)
+        include(InstallRequiredSystemLibraries)
     endif()
 endif()
 
@@ -122,7 +136,7 @@ if(STROKES_BUILD_TESTS)
     if(WIN32)
         add_executable(strokes_windows_smoke_tests
             tests/windows_smoke_tests.cpp
-            resources/strokes_plus_plus.rc
+            ${CMAKE_CURRENT_BINARY_DIR}/generated/strokes_plus_plus.rc
         )
         target_link_libraries(strokes_windows_smoke_tests PRIVATE strokes_windows)
         target_compile_features(strokes_windows_smoke_tests PRIVATE cxx_std_20)
@@ -133,4 +147,27 @@ if(STROKES_BUILD_TESTS)
         add_test(NAME strokes_plus_plus_idle_test COMMAND StrokesPlusPlus --idle-test)
         set_tests_properties(strokes_plus_plus_idle_test PROPERTIES TIMEOUT 10)
     endif()
+endif()
+
+if(WIN32)
+    set(CPACK_PACKAGE_NAME "StrokesPlusPlus")
+    set(CPACK_PACKAGE_VENDOR "Strokes++ contributors")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Native Windows mouse gesture application")
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY "StrokesPlusPlus")
+    set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+    set(CPACK_PACKAGE_FILE_NAME "StrokesPlusPlus-${PROJECT_VERSION}-win64")
+    set(CPACK_PACKAGE_CHECKSUM SHA256)
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+    set(CPACK_GENERATOR "NSIS64;ZIP")
+
+    set(CPACK_NSIS_DISPLAY_NAME "Strokes++")
+    set(CPACK_NSIS_PACKAGE_NAME "Strokes++")
+    set(CPACK_NSIS_MUI_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/strokes_plus_plus_logo.ico")
+    set(CPACK_NSIS_MUI_UNIICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/strokes_plus_plus_logo.ico")
+    set(CPACK_NSIS_INSTALLED_ICON_NAME "StrokesPlusPlus.exe")
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_PACKAGE_EXECUTABLES "StrokesPlusPlus" "Strokes++")
+    set(CPACK_CREATE_DESKTOP_LINKS "StrokesPlusPlus")
+
+    include(CPack)
 endif()

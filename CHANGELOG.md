@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Windows installer
+
+- Added CMake install rules and CPack packaging for a versioned 64-bit NSIS installer and portable
+  ZIP, including the application icon, bundled Visual C++ runtime, Start Menu/Desktop shortcuts,
+  Add/Remove Programs registration, upgrade-time uninstall, and a reproducible `package.ps1` flow.
+- Added Windows file and product version metadata sourced from the CMake project version.
+
+### StrokesPlus.net default gesture mapping
+
+- Remapped the built-in gestures to direction- and shape-based StrokesPlus.net defaults for
+  clipboard, selection, window management, media control, navigation, and Explorer launch.
+- Added M, P, e, C, chevron, rectangle, and diagonal compound gesture patterns, including
+  maximize/restore toggle and center-window operations.
+- Added right-button mouse-wheel volume controls and left/right rocker navigation triggers.
+- Made non-drawn wheel and rocker actions clear the gesture fields and display
+  `No Gesture Assigned` instead of leaving the previously selected gesture visible.
+- Made mouse-click cleanup tests independent of the interactive desktop and corrected the window
+  activation smoke test to recognize Windows' documented foreground-policy denial explicitly.
+- Updated Help for the 41-pattern catalog, StrokesPlus.net defaults, Chrome and Excel overrides,
+  wheel and rocker triggers, assigned-action details, and the `No Gesture Assigned` state.
+- Added Chrome defaults for new tab, reload, and reopen-closed-tab, plus Excel defaults for
+  previous/next worksheet. Application overrides continue to take precedence over global actions.
+
 ### Global Actions UI refresh
 
 - Reworked Global Actions around an assigned-action list, gesture selector, gesture-management

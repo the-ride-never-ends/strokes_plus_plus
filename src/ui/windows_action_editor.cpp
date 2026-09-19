@@ -257,7 +257,7 @@ void WindowsActionEditor::refresh(bool reset_choices) {
   } else if (type == 4) {
     operation = option = true;
     if (reset_choices) {
-      reset_combo(window_, operation_id, {L"Close", L"Minimize", L"Maximize", L"Restore", L"Activate", L"Move", L"Resize", L"Move and resize"});
+      reset_combo(window_, operation_id, {L"Close", L"Minimize", L"Maximize", L"Restore", L"Activate", L"Move", L"Resize", L"Move and resize", L"Maximize / Restore", L"Center"});
       reset_combo(window_, option_id, {L"Gesture window", L"Foreground window", L"Window at gesture start"});
     }
     label(window_, option_label_id, L"Window target");

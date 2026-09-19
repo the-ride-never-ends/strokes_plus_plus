@@ -80,6 +80,8 @@ bool known(WindowOperation value) {
     case WindowOperation::move:
     case WindowOperation::resize:
     case WindowOperation::move_resize:
+    case WindowOperation::toggle_maximize_restore:
+    case WindowOperation::center:
       return true;
   }
   return false;
@@ -255,6 +257,8 @@ std::string action_operation_name(const ActionDefinition& definition) {
       case WindowOperation::move: return "move";
       case WindowOperation::resize: return "resize";
       case WindowOperation::move_resize: return "move_resize";
+      case WindowOperation::toggle_maximize_restore: return "toggle_maximize_restore";
+      case WindowOperation::center: return "center";
     }
   }
   if (const auto* value = std::get_if<MediaParameters>(&definition.parameters)) {
@@ -384,6 +388,8 @@ std::string action_display_name(const ActionDefinition& definition) {
           case WindowOperation::move: operation = "Move"; break;
           case WindowOperation::resize: operation = "Resize"; break;
           case WindowOperation::move_resize: operation = "Move and resize"; break;
+          case WindowOperation::toggle_maximize_restore: operation = "Maximize / Restore"; break;
+          case WindowOperation::center: operation = "Center"; break;
         }
         std::string result = operation + " " + std::string(window_target(value->target));
         if (value->x && value->y)
@@ -494,6 +500,8 @@ std::string action_label(const ActionDefinition& definition) {
       case WindowOperation::move: return "Move Window";
       case WindowOperation::resize: return "Resize Window";
       case WindowOperation::move_resize: return "Move and Resize Window";
+      case WindowOperation::toggle_maximize_restore: return "Maximize / Restore";
+      case WindowOperation::center: return "Center Window";
     }
   }
   if (const auto* value = parameters<MediaParameters>(definition)) {

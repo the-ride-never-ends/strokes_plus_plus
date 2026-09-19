@@ -11,7 +11,7 @@ namespace strokes::input {
 bool WindowsMouseClick::click(ActivationButton button, gestures::Point position) {
   if (button == ActivationButton::left) return false;
   POINT current{};
-  if (!::GetCursorPos(&current)) return false;
+  if (!cursor_provider_ || !cursor_provider_(&current)) return false;
   const RECT virtual_screen{
       ::GetSystemMetrics(SM_XVIRTUALSCREEN), ::GetSystemMetrics(SM_YVIRTUALSCREEN),
       ::GetSystemMetrics(SM_XVIRTUALSCREEN) + ::GetSystemMetrics(SM_CXVIRTUALSCREEN),

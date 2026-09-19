@@ -15,7 +15,10 @@ namespace strokes::input {
 class WindowsMouseClick final : public IMouseClick {
  public:
   using Sender = std::function<UINT(UINT, INPUT*, int)>;
-  explicit WindowsMouseClick(Sender sender = ::SendInput) : sender_(std::move(sender)) {}
+  using CursorProvider = std::function<bool(POINT*)>;
+  explicit WindowsMouseClick(Sender sender = ::SendInput,
+                             CursorProvider cursor_provider = ::GetCursorPos)
+      : sender_(std::move(sender)), cursor_provider_(std::move(cursor_provider)) {}
   [[nodiscard]] bool click(ActivationButton button, gestures::Point position) override;
   [[nodiscard]] static std::array<INPUT, 4> make_inputs(ActivationButton button,
                                                         gestures::Point position,
@@ -24,6 +27,7 @@ class WindowsMouseClick final : public IMouseClick {
 
  private:
   Sender sender_;
+  CursorProvider cursor_provider_;
 };
 
 }  // namespace strokes::input

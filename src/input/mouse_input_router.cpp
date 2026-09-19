@@ -26,6 +26,15 @@ void MouseInputRouter::configure(Options options) {
 }
 
 MouseRouteResult MouseInputRouter::route(const MouseInputEvent& event) {
+  if (event.type == MouseEventType::button_up && event.button == ActivationButton::left) {
+    left_down_ = false;
+    if (suppress_left_release_) {
+      suppress_left_release_ = false;
+      return {.suppress_input = true};
+    }
+  }
+  if (event.type == MouseEventType::button_down && event.button == ActivationButton::left)
+    left_down_ = true;
   if (cancelled_release_pending_ && event.type == MouseEventType::button_up &&
       event.button == cancelled_button_) {
     cancelled_release_pending_ = false;
@@ -39,12 +48,21 @@ MouseRouteResult MouseInputRouter::route(const MouseInputEvent& event) {
     if (event.button != options_.activation_button) {
       return {};
     }
+    if (event.button == ActivationButton::right && left_down_) {
+      MouseInputEvent trigger = event;
+      trigger.type = MouseEventType::rocker_forward;
+      const bool delivered = deliver(trigger);
+      cancelled_release_pending_ = true;
+      cancelled_button_ = ActivationButton::right;
+      return {.suppress_input = true, .event_delivered = delivered};
+    }
     if (!deliver(event)) {
       return {};
     }
     interaction_active_ = true;
     cancelled_release_pending_ = false;
     start_position_ = event.position;
+    active_target_window_ = event.target_window;
     const double scale =
         options_.scale_provider ? options_.scale_provider() : 1.0;
     active_movement_threshold_ =
@@ -54,6 +72,27 @@ MouseRouteResult MouseInputRouter::route(const MouseInputEvent& event) {
 
   if (!interaction_active_) {
     return {};
+  }
+
+  if ((event.type == MouseEventType::wheel_up || event.type == MouseEventType::wheel_down) &&
+      options_.activation_button == ActivationButton::right) {
+    MouseInputEvent trigger = event;
+    trigger.target_window = active_target_window_;
+    const bool delivered = deliver(trigger);
+    return {.suppress_input = true, .event_delivered = delivered};
+  }
+
+  if (event.type == MouseEventType::button_down && event.button == ActivationButton::left &&
+      options_.activation_button == ActivationButton::right) {
+    MouseInputEvent trigger = event;
+    trigger.type = MouseEventType::rocker_back;
+    trigger.target_window = active_target_window_;
+    const bool delivered = deliver(trigger);
+    suppress_left_release_ = true;
+    cancelled_release_pending_ = true;
+    cancelled_button_ = ActivationButton::right;
+    clear_interaction();
+    return {.suppress_input = true, .event_delivered = delivered};
   }
 
   if (event.type == MouseEventType::pointer_moved) {
@@ -125,6 +164,7 @@ bool MouseInputRouter::deliver(const MouseInputEvent& event) { return sink_(even
 void MouseInputRouter::clear_interaction() noexcept {
   interaction_active_ = false;
   capturing_ = false;
+  active_target_window_ = 0;
 }
 
 }  // namespace strokes::input

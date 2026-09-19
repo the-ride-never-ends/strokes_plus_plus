@@ -55,6 +55,8 @@ class GestureEngine {
 
  private:
   [[nodiscard]] actions::ActionResult execute(const actions::ActionDefinition& action);
+  [[nodiscard]] actions::ActionResult execute(const actions::ActionDefinition& action,
+                                              const input::GestureSession& session);
 
   gestures::Recognizer& recognizer_;
   const std::vector<context::ApplicationProfile>& profiles_;

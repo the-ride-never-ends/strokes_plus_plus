@@ -72,6 +72,29 @@ ActionResult WindowsWindowService::perform(WindowOperation operation, std::uintp
       return !::IsIconic(handle) && !::IsZoomed(handle)
                  ? ActionResult::succeeded()
                  : failed("window_restore_failed", "The window was not restored.");
+    case WindowOperation::toggle_maximize_restore: {
+      const bool was_maximized = ::IsZoomed(handle) != FALSE;
+      (void)::ShowWindow(handle, was_maximized ? SW_RESTORE : SW_MAXIMIZE);
+      const bool changed = was_maximized ? !::IsZoomed(handle) : ::IsZoomed(handle);
+      return changed ? ActionResult::succeeded()
+                     : failed("window_toggle_failed", "The window state did not change.");
+    }
+    case WindowOperation::center: {
+      RECT rectangle{};
+      MONITORINFO monitor_info{};
+      monitor_info.cbSize = sizeof(monitor_info);
+      const HMONITOR monitor = ::MonitorFromWindow(handle, MONITOR_DEFAULTTONEAREST);
+      if (!::GetWindowRect(handle, &rectangle) || !::GetMonitorInfoW(monitor, &monitor_info))
+        return failed("window_center_failed", "The window bounds could not be read.");
+      const int width = rectangle.right - rectangle.left;
+      const int height = rectangle.bottom - rectangle.top;
+      const int x = monitor_info.rcWork.left + (monitor_info.rcWork.right - monitor_info.rcWork.left - width) / 2;
+      const int y = monitor_info.rcWork.top + (monitor_info.rcWork.bottom - monitor_info.rcWork.top - height) / 2;
+      return ::SetWindowPos(handle, nullptr, x, y, 0, 0,
+                            SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER | SWP_NOSIZE)
+                 ? ActionResult::succeeded()
+                 : failed("window_center_failed", "Windows rejected the centering request.");
+    }
     case WindowOperation::activate:
       if (::SetForegroundWindow(handle) && ::GetForegroundWindow() == handle)
         return ActionResult::succeeded();

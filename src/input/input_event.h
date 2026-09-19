@@ -12,6 +12,10 @@ enum class MouseEventType {
   pointer_moved,
   button_down,
   button_up,
+  wheel_up,
+  wheel_down,
+  rocker_back,
+  rocker_forward,
   cancel,
 };
 

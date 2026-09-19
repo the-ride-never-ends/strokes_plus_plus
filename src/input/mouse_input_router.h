@@ -50,8 +50,11 @@ class MouseInputRouter {
   bool interaction_active_{};
   bool capturing_{};
   bool cancelled_release_pending_{};
+  bool left_down_{};
+  bool suppress_left_release_{};
   ActivationButton cancelled_button_{ActivationButton::right};
   gestures::Point start_position_{};
+  std::uintptr_t active_target_window_{};
   double active_movement_threshold_{8.0};
 };
 

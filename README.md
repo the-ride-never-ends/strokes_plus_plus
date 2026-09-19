@@ -49,6 +49,24 @@ ctest --test-dir build-vs2026 -C Debug --output-on-failure
 
 Run `build-vs2026/Debug/StrokesPlusPlus.exe` (or the equivalent configured build directory). The application has no taskbar window. Use its notification-area icon to enable or disable gestures, open Settings, or exit. Settings run in-process for the MVP. Recognition runs on the engine worker thread and actions execute on a separate action worker; the engine currently waits for each action to finish, which is being changed so that a slow action cannot delay the next gesture.
 
+## Installer
+
+The Windows installer is built from a tested Release configuration with CMake, CPack, and NSIS.
+Install [NSIS](https://nsis.sourceforge.io/) and run:
+
+```powershell
+.\package.ps1
+```
+
+The installer is written to `build-package/packages`. It installs Strokes++ and the required
+Visual C++ runtime files, creates Start Menu and Desktop shortcuts, registers an uninstaller in
+Windows Apps, and preserves user configuration under `%LOCALAPPDATA%\StrokesPlusPlus` when the
+application is upgraded or removed. To create both the installer and a portable ZIP package, run:
+
+```powershell
+.\package.ps1 -Format Both
+```
+
 ## Action configuration schema
 
 Actions are stored under `global_actions` or a profile's `actions` object. Each mapping has a

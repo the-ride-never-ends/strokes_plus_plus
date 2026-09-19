@@ -61,7 +61,7 @@ bool WindowsMouseHook::translate(WPARAM message, const MSLLHOOKSTRUCT& native,
   event.position = {static_cast<double>(native.pt.x), static_cast<double>(native.pt.y)};
   event.timestamp = std::chrono::milliseconds(native.time);
   if (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN || message == WM_MBUTTONDOWN ||
-      message == WM_XBUTTONDOWN)
+      message == WM_XBUTTONDOWN || message == WM_MOUSEWHEEL)
     event.target_window = reinterpret_cast<std::uintptr_t>(::GetForegroundWindow());
 
   switch (message) {
@@ -72,6 +72,10 @@ bool WindowsMouseHook::translate(WPARAM message, const MSLLHOOKSTRUCT& native,
       event.type = MouseEventType::button_down;
       // Left is not a supported activation button, but routing the down event
       // lets an active gesture treat it as an invalid sequence.
+      event.button = ActivationButton::left;
+      return true;
+    case WM_LBUTTONUP:
+      event.type = MouseEventType::button_up;
       event.button = ActivationButton::left;
       return true;
     case WM_RBUTTONDOWN:
@@ -96,6 +100,10 @@ bool WindowsMouseHook::translate(WPARAM message, const MSLLHOOKSTRUCT& native,
           message == WM_XBUTTONDOWN ? MouseEventType::button_down : MouseEventType::button_up;
       event.button = HIWORD(native.mouseData) == XBUTTON1 ? ActivationButton::x_button_1
                                                           : ActivationButton::x_button_2;
+      return true;
+    case WM_MOUSEWHEEL:
+      event.type = static_cast<short>(HIWORD(native.mouseData)) > 0 ? MouseEventType::wheel_up
+                                                                   : MouseEventType::wheel_down;
       return true;
     default:
       return false;

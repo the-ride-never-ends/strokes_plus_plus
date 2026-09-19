@@ -41,6 +41,45 @@ EngineUpdate GestureEngine::process(const input::MouseInputEvent& event) {
   const auto click_position =
       state_machine_.session() ? state_machine_.session()->start_position : event.position;
 
+  const auto trigger_id = [&]() -> const char* {
+    switch (event.type) {
+      case input::MouseEventType::wheel_up: return "wheel-up";
+      case input::MouseEventType::wheel_down: return "wheel-down";
+      case input::MouseEventType::rocker_back: return "rocker-back";
+      case input::MouseEventType::rocker_forward: return "rocker-forward";
+      default: return nullptr;
+    }
+  }();
+  if (trigger_id) {
+    input::GestureSession session;
+    if (state_machine_.session()) {
+      session = *state_machine_.session();
+      result.gesture = state_machine_.cancel();
+      (void)state_machine_.cancellation_finished();
+    } else {
+      session.start_position = event.position;
+      session.current_position = event.position;
+      session.activation_button = event.button;
+      session.modifiers = modifier_state_.current_modifiers();
+      const auto application = event.target_window != 0
+                                   ? application_context_.window_application(event.target_window)
+                                   : application_context_.foreground_application();
+      if (application) session.application = *application;
+    }
+    const auto resolved = actions::ActionResolver::resolve(trigger_id, session.application,
+                                                            profiles_, global_actions_);
+    if (!resolved) return result;
+    result.action_source = resolved->source;
+    result.profile_id = resolved->profile_id;
+    result.action_type = actions::action_type_name(resolved->action.type);
+    result.action_operation = actions::action_operation_name(resolved->action);
+    result.action_target = actions::action_target_name(resolved->action);
+    result.action_attempted = true;
+    result.action_result = execute(resolved->action, session);
+    result.action_succeeded = result.action_result->success;
+    return result;
+  }
+
   switch (event.type) {
     case input::MouseEventType::button_down: {
       input::GestureStart start;
@@ -68,6 +107,10 @@ EngineUpdate GestureEngine::process(const input::MouseInputEvent& event) {
         (void)state_machine_.cancellation_finished();
       }
       break;
+    case input::MouseEventType::wheel_up:
+    case input::MouseEventType::wheel_down:
+    case input::MouseEventType::rocker_back:
+    case input::MouseEventType::rocker_forward: break;
   }
 
   if (feedback_) {
@@ -115,7 +158,11 @@ EngineUpdate GestureEngine::process(const input::MouseInputEvent& event) {
 }
 
 actions::ActionResult GestureEngine::execute(const actions::ActionDefinition& definition) {
-  const auto& session = *state_machine_.session();
+  return execute(definition, *state_machine_.session());
+}
+
+actions::ActionResult GestureEngine::execute(const actions::ActionDefinition& definition,
+                                             const input::GestureSession& session) {
   actions::ActionContext context;
   context.gesture = session;
   context.application = session.application;

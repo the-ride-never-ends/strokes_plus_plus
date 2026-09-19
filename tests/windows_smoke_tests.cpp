@@ -5,6 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -229,8 +230,11 @@ int main() {
           "window service maximizes a live target");
     check(window_service.perform(actions::WindowOperation::restore, handle, {}).success,
           "window service restores a maximized target");
-    check(window_service.perform(actions::WindowOperation::activate, handle, {}).success,
-          "window service activates a live target");
+    const auto activation =
+        window_service.perform(actions::WindowOperation::activate, handle, {});
+    check((activation.success && ::GetForegroundWindow() == action_window) ||
+              (!activation.success && activation.code == "window_activation_denied"),
+          "window service activates a live target or reports Windows foreground-policy denial");
     const auto before_move = window_service.bounds(handle);
     check(window_service
               .perform(actions::WindowOperation::move, handle,
@@ -316,10 +320,24 @@ int main() {
             !::IsWindowVisible(::GetDlgItem(settings_window, ui::profiles_id)) &&
             ::IsWindowVisible(::GetDlgItem(settings_window, ui::gesture_preview_id)),
         "selecting Global Actions hides options and shows the gesture editor and gesture preview");
-  check(::SendDlgItemMessageW(settings_window, ui::gesture_select_id, CB_GETCOUNT, 0, 0) == 36 &&
-            ::SendDlgItemMessageW(settings_window, ui::gestures_id, LB_GETCOUNT, 0, 0) == 30 &&
+  check(::SendDlgItemMessageW(settings_window, ui::gesture_select_id, CB_GETCOUNT, 0, 0) == 41 &&
+            ::SendDlgItemMessageW(settings_window, ui::gestures_id, LB_GETCOUNT, 0, 0) == 22 &&
             ::GetDlgItem(settings_window, ui::global_remove_id) != nullptr,
         "Global Actions separates the full gesture selector from assigned action entries");
+  (void)::SendDlgItemMessageW(settings_window, ui::gestures_id, LB_SETCURSEL, 21, 0);
+  (void)::SendMessageW(settings_window, WM_COMMAND,
+                       MAKEWPARAM(ui::gestures_id, LBN_SELCHANGE),
+                       reinterpret_cast<LPARAM>(::GetDlgItem(settings_window, ui::gestures_id)));
+  wchar_t preview_text[64]{};
+  wchar_t assigned_text[64]{};
+  ::GetWindowTextW(::GetDlgItem(settings_window, ui::gesture_preview_id), preview_text, 64);
+  ::GetDlgItemTextW(settings_window, ui::shortcut_id, assigned_text, 64);
+  check(::SendDlgItemMessageW(settings_window, ui::gesture_select_id, CB_GETCURSEL, 0, 0) ==
+                CB_ERR &&
+            ::GetWindowTextLengthW(::GetDlgItem(settings_window, ui::gesture_name_id)) == 0 &&
+            std::wstring_view(preview_text) == L"No Gesture Assigned" &&
+            std::wstring_view(assigned_text) == L"ALT+RIGHT",
+        "non-drawn triggers clear gesture fields while retaining their assigned action");
   (void)::SendMessageW(editor_tabs, TCM_SETCURSEL, 2, 0);
   (void)::SendMessageW(settings_window, WM_NOTIFY, ui::editor_tabs_id,
                        reinterpret_cast<LPARAM>(&tab_change));
@@ -404,10 +422,15 @@ int main() {
   check((right[3].mi.dwFlags & MOUSEEVENTF_MOVE) != 0,
         "right click restores the current cursor position");
   std::vector<std::vector<INPUT>> mouse_batches;
-  input::WindowsMouseClick partial_mouse([&](UINT count, INPUT* inputs, int) {
-    mouse_batches.emplace_back(inputs, inputs + count);
-    return mouse_batches.size() == 1 ? 2U : count;
-  });
+  input::WindowsMouseClick partial_mouse(
+      [&](UINT count, INPUT* inputs, int) {
+        mouse_batches.emplace_back(inputs, inputs + count);
+        return mouse_batches.size() == 1 ? 2U : count;
+      },
+      [](POINT* point) {
+        *point = {30, 40};
+        return true;
+      });
   check(!partial_mouse.click(input::ActivationButton::right, {10, 20}) &&
             mouse_batches.size() == 2 && mouse_batches.back().size() == 2 &&
             mouse_batches.back()[0].mi.dwFlags == MOUSEEVENTF_RIGHTUP,

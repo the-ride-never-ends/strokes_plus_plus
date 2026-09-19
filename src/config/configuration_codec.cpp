@@ -167,6 +167,8 @@ std::string encode(actions::WindowOperation value) {
     case actions::WindowOperation::move: return "move";
     case actions::WindowOperation::resize: return "resize";
     case actions::WindowOperation::move_resize: return "move_resize";
+    case actions::WindowOperation::toggle_maximize_restore: return "toggle_maximize_restore";
+    case actions::WindowOperation::center: return "center";
   }
   return {};
 }
@@ -180,6 +182,9 @@ std::optional<actions::WindowOperation> decode_window_operation(std::string_view
   if (value == "move") return actions::WindowOperation::move;
   if (value == "resize") return actions::WindowOperation::resize;
   if (value == "move_resize") return actions::WindowOperation::move_resize;
+  if (value == "toggle_maximize_restore")
+    return actions::WindowOperation::toggle_maximize_restore;
+  if (value == "center") return actions::WindowOperation::center;
   return std::nullopt;
 }
 

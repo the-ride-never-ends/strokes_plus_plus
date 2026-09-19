@@ -130,10 +130,10 @@ void invalid_sequence_cancellation() {
   (void)router.route(event(MouseEventType::button_down, 0, 0));
   const auto unrelated =
       router.route(event(MouseEventType::button_down, 1, 1, ActivationButton::left));
-  check(!unrelated.suppress_input && unrelated.event_delivered && !router.interaction_active(),
-        "another mouse-button press passes through and cancels the active gesture");
-  check(delivered.back().type == MouseEventType::cancel,
-        "invalid input sequence delivers cancellation to the engine");
+  check(unrelated.suppress_input && unrelated.event_delivered && !router.interaction_active(),
+        "left click during a held right button triggers rocker-back and ends capture");
+  check(delivered.back().type == MouseEventType::rocker_back,
+        "right-then-left input delivers the rocker-back trigger");
   check(router.route(event(MouseEventType::button_up, 1, 1)).suppress_input,
         "activation release after invalid-sequence cancellation remains balanced");
 }

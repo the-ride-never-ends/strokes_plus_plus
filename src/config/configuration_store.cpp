@@ -372,15 +372,27 @@ std::vector<gestures::GestureDefinition> built_in_gestures() {
   add_cardinal("up-down-up-down", "Up Down Up Down", true, "UDUD");
   add_cardinal("up-left", "Up Left", true, "UL");
   add_cardinal("up-right", "Up Right", true, "UR");
-  result.push_back(built_in("slash-up-down", "Diagonal Up-Right Down-Left", false,
+  result.push_back(built_in("slash-up-down", "Up Right / Down Left", true,
                             {{0, 100}, {50, 50}, {100, 0}, {50, 50}, {0, 100}}));
-  result.push_back(built_in("backslash-up-down", "Diagonal Up-Left Down-Right", false,
+  result.push_back(built_in("backslash-up-down", "Up Left / Down Right", true,
                             {{100, 100}, {50, 50}, {0, 0}, {50, 50}, {100, 100}}));
   result.push_back(built_in("down-slash-up", "Down Diagonal Up-Right", false,
                             {{0, 0}, {0, 100}, {100, 0}}));
   add_cardinal("down-right-left", "Down Right Left", false, "DRL");
   add_cardinal("left-right-down", "Left Right Down", false, "LRD");
   add_cardinal("up-right-left", "Up Right Left", false, "URL");
+  result.push_back(built_in("up-right-down-right", "Up Right / Down Right", true,
+                            {{0, 100}, {100, 0}, {200, 100}}));
+  result.push_back(built_in("letter-m", "M", true,
+                            {{0, 100}, {0, 0}, {50, 60}, {100, 0}, {100, 100}}));
+  result.push_back(built_in("letter-p", "P", true,
+                            {{0, 100}, {0, 0}, {70, 0}, {85, 35}, {70, 60}, {0, 60}}));
+  result.push_back(built_in("letter-e", "e", true,
+                            {{90, 60}, {20, 60}, {10, 35}, {35, 15}, {80, 20}, {90, 60},
+                             {70, 95}, {20, 90}}));
+  result.push_back(built_in("letter-c", "C", true,
+                            {{90, 15}, {55, 0}, {20, 15}, {0, 50}, {20, 85}, {55, 100},
+                             {90, 85}}));
   return result;
 }
 
@@ -412,7 +424,8 @@ void migrate_gesture_catalog(ConfigurationBundle& configuration) {
   for (auto& gesture : built_in_gestures()) {
     const auto found = std::ranges::find(configuration.gestures.gestures, gesture.id,
                                          &gestures::GestureDefinition::id);
-    if (found == configuration.gestures.gestures.end()) {
+    const bool already_present = found != configuration.gestures.gestures.end();
+    if (!already_present) {
       configuration.gestures.gestures.push_back(std::move(gesture));
     } else if (configuration.gestures.version < 3) {
       const bool old_diagonal_label =
@@ -424,6 +437,11 @@ void migrate_gesture_catalog(ConfigurationBundle& configuration) {
           (found->id == "backslash-up-down" && found->name == "\\ Up Down") ||
           (found->id == "down-slash-up" && found->name == "Down / Up");
       if (old_diagonal_label) found->name = gesture.name;
+    }
+    if (configuration.gestures.version < 4 && already_present) {
+      if (found->id == "down-right-up-left") found->name = "Rectangle / Box";
+      if (found->id == "slash-up-down" || found->id == "backslash-up-down")
+        found->enabled = true;
     }
   }
   configuration.gestures.version = GestureFile::current_version;
@@ -449,45 +467,70 @@ void add_default_global_actions(actions::ActionResolver::GlobalActions& actions)
   const auto add = [&](const char* gesture, actions::ActionDefinition action) {
     actions.emplace(gesture, std::move(action));
   };
-  add("slash-down", window_action(actions::WindowOperation::minimize));
-  add("slash-up", window_action(actions::WindowOperation::maximize));
-  add("backslash-down", actions::ActionDefinition::keyboard("ALT+F4"));
-  add("backslash-up", window_action(actions::WindowOperation::restore));
-  add("down", actions::ActionDefinition::keyboard("PAGEDOWN"));
-  add("down-left", actions::ActionDefinition::keyboard("END"));
-  add("down-left-right", actions::ActionDefinition::keyboard("F5"));
-  add("down-right",
+  add("up", actions::ActionDefinition::keyboard("CTRL+C"));
+  add("down", actions::ActionDefinition::keyboard("CTRL+V"));
+  add("up-right-down-right", actions::ActionDefinition::keyboard("CTRL+A"));
+  add("down-right-up-left", actions::ActionDefinition::keyboard("WIN+SHIFT+S"));
+  add("backslash-down", actions::ActionDefinition::keyboard("DELETE"));
+  add("backslash-up", actions::ActionDefinition::keyboard("ESC"));
+  add("letter-m", volume_action(actions::VolumeOperation::mute_toggle));
+  add("right", media_action(actions::MediaOperation::next_track));
+  add("letter-p", media_action(actions::MediaOperation::play_pause));
+  add("left", media_action(actions::MediaOperation::previous_track));
+  add("wheel-down", volume_action(actions::VolumeOperation::decrease, 5.0));
+  add("wheel-up", volume_action(actions::VolumeOperation::increase, 5.0));
+  add("letter-e",
       {actions::ActionDefinition::current_version, actions::ActionType::process,
        actions::ProcessParameters{actions::ProcessOperation::launch, "explorer.exe", {}, {}}});
-  add("down-right-up-left", actions::ActionDefinition::keyboard("CTRL+A"));
-  add("down-up", volume_action(actions::VolumeOperation::mute_toggle));
-  add("down-up-down", volume_action(actions::VolumeOperation::decrease, 5.0));
-  add("down-up-down-up", volume_action(actions::VolumeOperation::increase, 5.0));
-  add("down-up-right-left", actions::ActionDefinition::keyboard("ESC"));
-  add("left", actions::ActionDefinition::keyboard("ALT+LEFT"));
-  add("left-down", actions::ActionDefinition::keyboard("DELETE"));
-  add("left-right", actions::ActionDefinition::keyboard("CTRL+C"));
-  add("left-right-left", actions::ActionDefinition::keyboard("CTRL+X"));
-  add("left-up", actions::ActionDefinition::keyboard("HOME"));
-  add("right", actions::ActionDefinition::keyboard("ALT+RIGHT"));
-  add("right-down", actions::ActionDefinition::keyboard("CTRL+V"));
-  add("right-left", actions::ActionDefinition::keyboard("CTRL+Z"));
-  add("right-left-right", actions::ActionDefinition::keyboard("CTRL+Y"));
-  add("right-left-right-left",
-      {actions::ActionDefinition::current_version, actions::ActionType::process,
-       actions::ProcessParameters{actions::ProcessOperation::launch, "taskmgr.exe", {}, {}}});
-  add("right-up", actions::ActionDefinition::keyboard("CTRL+N"));
-  add("up", actions::ActionDefinition::keyboard("PAGEUP"));
-  add("up-down", media_action(actions::MediaOperation::play_pause));
-  add("up-down-up", media_action(actions::MediaOperation::next_track));
-  add("up-down-up-down", media_action(actions::MediaOperation::previous_track));
-  add("up-left", actions::ActionDefinition::keyboard("CTRL+HOME"));
-  add("up-right", actions::ActionDefinition::keyboard("CTRL+END"));
+  add("rocker-back", actions::ActionDefinition::keyboard("ALT+LEFT"));
+  add("rocker-forward", actions::ActionDefinition::keyboard("ALT+RIGHT"));
+  add("letter-c", window_action(actions::WindowOperation::center));
+  add("slash-up-down", window_action(actions::WindowOperation::close));
+  add("backslash-up-down", actions::ActionDefinition::keyboard("CTRL+W"));
+  add("slash-up", window_action(actions::WindowOperation::toggle_maximize_restore));
+  add("slash-down", window_action(actions::WindowOperation::minimize));
+  add("up-right", actions::ActionDefinition::keyboard("CTRL+TAB"));
+  add("left-up", actions::ActionDefinition::keyboard("CTRL+SHIFT+TAB"));
+}
+
+void add_default_application_profiles(std::vector<context::ApplicationProfile>& profiles) {
+  const auto add_profile = [&](std::string id, std::string name, std::string process,
+                               std::initializer_list<std::pair<const char*, const char*>> mappings) {
+    auto found = std::ranges::find(profiles, id, &context::ApplicationProfile::id);
+    if (found == profiles.end()) {
+      context::ApplicationProfile profile;
+      profile.id = std::move(id);
+      profile.name = std::move(name);
+      profile.criteria.push_back({context::ApplicationProperty::process_name,
+                                  context::MatchMode::exact, std::move(process), std::nullopt});
+      profiles.push_back(std::move(profile));
+      found = std::prev(profiles.end());
+    }
+    for (const auto& [gesture, shortcut] : mappings)
+      found->actions_by_gesture.insert_or_assign(gesture,
+                                                  actions::ActionDefinition::keyboard(shortcut));
+  };
+  add_profile("built-in-chrome", "Chrome", "chrome.exe",
+              {{"right-up", "CTRL+T"}, {"up-down", "CTRL+R"},
+               {"left-down", "CTRL+SHIFT+T"}});
+  add_profile("built-in-excel", "Excel", "excel.exe",
+              {{"right", "CTRL+PAGEDOWN"}, {"left", "CTRL+PAGEUP"}});
 }
 
 void migrate_default_global_actions(ConfigurationBundle& configuration) {
   if (configuration.profiles.version >= ProfileFile::current_version) return;
-  add_default_global_actions(configuration.profiles.global_actions);
+  if (configuration.profiles.version < 3) {
+    static constexpr std::array old_ids{
+        "slash-down", "slash-up", "backslash-down", "backslash-up", "down", "down-left",
+        "down-left-right", "down-right", "down-right-up-left", "down-up", "down-up-down",
+        "down-up-down-up", "down-up-right-left", "left", "left-down", "left-right",
+        "left-right-left", "left-up", "right", "right-down", "right-left",
+        "right-left-right", "right-left-right-left", "right-up", "up", "up-down",
+        "up-down-up", "up-down-up-down", "up-left", "up-right"};
+    for (const char* id : old_ids) configuration.profiles.global_actions.erase(id);
+    add_default_global_actions(configuration.profiles.global_actions);
+    add_default_application_profiles(configuration.profiles.profiles);
+  }
   configuration.profiles.version = ProfileFile::current_version;
 }
 
@@ -543,6 +586,7 @@ ConfigurationBundle ConfigurationStore::defaults() {
   ConfigurationBundle result;
   result.gestures.gestures = built_in_gestures();
   add_default_global_actions(result.profiles.global_actions);
+  add_default_application_profiles(result.profiles.profiles);
   return result;
 }
 

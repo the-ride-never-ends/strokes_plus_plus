@@ -37,11 +37,11 @@ void creation_and_persistence() {
             std::filesystem::exists(temp.path / "gestures.json") &&
             std::filesystem::exists(temp.path / "profiles.json"),
         "all three configuration files are created");
-  check(loaded.value->gestures.gestures.size() == 36 &&
+  check(loaded.value->gestures.gestures.size() == 41 &&
             loaded.value->gestures.gestures[0].name == "Diagonal Down-Left" &&
             loaded.value->gestures.gestures[1].name == "Diagonal Up-Right" &&
-            loaded.value->gestures.gestures[30].name == "Diagonal Up-Right Down-Left" &&
-            !loaded.value->gestures.gestures[30].enabled &&
+            loaded.value->gestures.gestures[30].name == "Up Right / Down Left" &&
+            loaded.value->gestures.gestures[30].enabled &&
             loaded.value->profiles.global_actions.at("slash-down").type ==
                 actions::ActionType::window &&
             std::get<actions::WindowParameters>(
@@ -49,12 +49,13 @@ void creation_and_persistence() {
                     .operation == actions::WindowOperation::minimize &&
             std::get<actions::WindowParameters>(
                 loaded.value->profiles.global_actions.at("slash-up").parameters)
-                    .operation == actions::WindowOperation::maximize &&
-            loaded.value->profiles.global_actions.size() == 30,
+                    .operation == actions::WindowOperation::toggle_maximize_restore &&
+            loaded.value->profiles.global_actions.size() == 22 &&
+            loaded.value->profiles.profiles.size() == 2,
         "defaults include the complete direction-named gesture catalog with separate actions");
   loaded.value->global.gestures_enabled = false;
   loaded.value->global.movement_threshold = 17;
-  *actions::keyboard_shortcut(loaded.value->profiles.global_actions.at("right")) = "CTRL+W";
+  *actions::keyboard_shortcut(loaded.value->profiles.global_actions.at("up")) = "CTRL+W";
   loaded.value->profiles.global_actions.at("slash-down") =
       actions::ActionDefinition::keyboard("ALT+F9");
   const actions::ActionDefinition process_action{
@@ -82,7 +83,7 @@ void creation_and_persistence() {
             reloaded.value->global.movement_threshold == 17,
         "global options persist across reload");
   check(reloaded && *actions::keyboard_shortcut(
-                          reloaded.value->profiles.global_actions.at("right")) == "CTRL+W",
+                          reloaded.value->profiles.global_actions.at("up")) == "CTRL+W",
         "action mappings persist across reload");
   check(reloaded && *actions::keyboard_shortcut(
                           reloaded.value->profiles.global_actions.at("slash-down")) == "ALT+F9",
@@ -90,12 +91,13 @@ void creation_and_persistence() {
   check(reloaded && reloaded.value->profiles.global_actions.at("process") == process_action &&
             reloaded.value->profiles.global_actions.at("mouse") == mouse_action,
         "generic action mappings and optional parameters survive save, restart, and reload");
-  check(reloaded && reloaded.value->gestures.gestures.size() == 37 &&
-            reloaded.value->gestures.gestures[36].templates[0].points.size() == 2,
+  check(reloaded && reloaded.value->gestures.gestures.size() == 42 &&
+            reloaded.value->gestures.gestures[41].templates[0].points.size() == 2,
         "gesture definitions and templates persist across reload");
-  check(reloaded && reloaded.value->profiles.profiles.size() == 1 &&
+  check(reloaded && reloaded.value->profiles.profiles.size() == 3 &&
+            reloaded.value->profiles.profiles.back().id == "notes" &&
             *actions::keyboard_shortcut(
-                reloaded.value->profiles.profiles[0].actions_by_gesture.at("custom-down")) ==
+                reloaded.value->profiles.profiles.back().actions_by_gesture.at("custom-down")) ==
                 "CTRL+S",
         "profiles, criteria, and overrides persist across reload");
 }
@@ -116,7 +118,7 @@ void malformed_and_recovery() {
   auto bad = store.load();
   check(bad && bad.warnings.find("config.json") != std::string::npos,
         "malformed global configuration is quarantined and reported");
-  check(bad && bad.value->gestures.gestures.size() == 37,
+  check(bad && bad.value->gestures.gestures.size() == 42,
         "malformed global configuration does not discard valid gestures");
   check(std::filesystem::exists(temp.path / "config.json.invalid"),
         "malformed global configuration is preserved for recovery");
@@ -150,8 +152,8 @@ void legacy_catalog_migration() {
   std::string error;
   check(store.save(legacy, error), "legacy gesture catalog fixture saves");
   const auto migrated = store.load();
-  check(migrated && migrated.value->gestures.version == 3 &&
-            migrated.value->gestures.gestures.size() == 36,
+  check(migrated && migrated.value->gestures.version == 4 &&
+            migrated.value->gestures.gestures.size() == 41,
         "version-one gesture files gain the complete direction-pattern catalog");
   check(migrated && migrated.value->profiles.global_actions.contains("slash-down") &&
             migrated.value->profiles.global_actions.contains("slash-up") &&
@@ -180,10 +182,10 @@ void diagonal_label_migration() {
   std::string error;
   check(store.save(version_two, error), "version-two diagonal-label fixture saves");
   const auto migrated = store.load();
-  check(migrated && migrated.value->gestures.version == 3 &&
+  check(migrated && migrated.value->gestures.version == 4 &&
             migrated.value->gestures.gestures[0].name == "Diagonal Down-Left" &&
             migrated.value->gestures.gestures[1].name == "Diagonal Up-Right" &&
-            migrated.value->gestures.gestures[30].name == "Diagonal Up-Right Down-Left",
+            migrated.value->gestures.gestures[30].name == "Up Right / Down Left",
         "version-two slash labels migrate to explicit diagonal directions");
 }
 
@@ -198,12 +200,13 @@ void default_action_migration() {
   std::string error;
   check(store.save(previous, error), "previous default-action fixture saves");
   const auto migrated = store.load();
-  check(migrated && migrated.value->profiles.version == 2 &&
-            migrated.value->profiles.global_actions.size() == 30,
-        "older profiles gain assignments for every activated built-in gesture");
-  check(migrated && *actions::keyboard_shortcut(
-                         migrated.value->profiles.global_actions.at("right")) == "CTRL+SHIFT+R",
-        "default-action migration preserves an existing customized assignment");
+  check(migrated && migrated.value->profiles.version == 3 &&
+            migrated.value->profiles.global_actions.size() == 22 &&
+            migrated.value->profiles.profiles.size() == 2,
+        "older profiles gain the StrokesPlus.net defaults and application overrides");
+  check(migrated && migrated.value->profiles.global_actions.at("right").type ==
+                        actions::ActionType::media,
+        "default-action migration replaces the previous built-in assignment set");
 }
 void interrupted_bundle_transaction() {
   TemporaryDirectory temp;

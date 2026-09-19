@@ -14,7 +14,18 @@ enum class ProcessOperation { launch };
 enum class MouseOperation { click, double_click, button_down, button_up, move };
 enum class MouseButton { left, right, middle, x_button_1, x_button_2 };
 enum class PositionTarget { current_cursor, gesture_start, gesture_end, absolute };
-enum class WindowOperation { close, minimize, maximize, restore, activate, move, resize, move_resize };
+enum class WindowOperation {
+  close,
+  minimize,
+  maximize,
+  restore,
+  activate,
+  move,
+  resize,
+  move_resize,
+  toggle_maximize_restore,
+  center,
+};
 enum class WindowTarget { gesture_window, foreground_window, window_at_gesture_start };
 enum class MediaOperation { play_pause, next_track, previous_track, stop };
 enum class VolumeOperation { increase, decrease, mute_toggle };

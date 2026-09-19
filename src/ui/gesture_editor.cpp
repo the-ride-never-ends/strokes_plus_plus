@@ -1,6 +1,7 @@
 #include "ui/gesture_editor.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -90,6 +91,13 @@ void GestureEditor::paint_preview(HWND preview, HDC target) const noexcept {
   RECT client{};
   ::GetClientRect(preview, &client);
   ::FillRect(target, &client, reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1));
+  if (!selected_action_id_.empty()) {
+    ::SetBkMode(target, TRANSPARENT);
+    ::SetTextColor(target, ::GetSysColor(COLOR_WINDOWTEXT));
+    (void)::DrawTextW(target, L"No Gesture Assigned", -1, &client,
+                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    return;
+  }
   const int chosen = index();
   if (chosen < 0 || static_cast<std::size_t>(chosen) >= configuration_->gestures.gestures.size())
     return;
@@ -208,6 +216,8 @@ bool GestureEditor::handle(int command, int notification) {
     return true;
   }
   if (command == gesture_select_id && notification == CBN_SELCHANGE) {
+    selected_action_id_.clear();
+    if (preview_) ::SetWindowTextW(preview_, L"");
     load();
     return true;
   }
@@ -220,6 +230,7 @@ int GestureEditor::index() const noexcept {
 }
 
 std::string GestureEditor::selected() const {
+  if (!selected_action_id_.empty()) return selected_action_id_;
   const int chosen = index();
   if (chosen < 0) return {};
   return configuration_->gestures.gestures[static_cast<std::size_t>(chosen)].id;
@@ -229,6 +240,8 @@ void GestureEditor::refresh() {
   ::SendDlgItemMessageW(window_, gestures_id, LB_RESETCONTENT, 0, 0);
   ::SendDlgItemMessageW(window_, gesture_select_id, CB_RESETCONTENT, 0, 0);
   action_gesture_ids_.clear();
+  selected_action_id_.clear();
+  if (preview_) ::SetWindowTextW(preview_, L"");
   for (const auto& gesture : configuration_->gestures.gestures) {
     std::wstring gesture_label = wide(gesture.name);
     gesture_label += gesture.enabled ? L" [active]" : L" [inactive]";
@@ -241,6 +254,17 @@ void GestureEditor::refresh() {
                           reinterpret_cast<LPARAM>(label.c_str()));
     action_gesture_ids_.push_back(gesture.id);
   }
+  for (const auto& [id, name] : std::array<std::pair<const char*, const char*>, 4>{
+           {{"wheel-down", "Wheel Down: Volume Down"},
+            {"wheel-up", "Wheel Up: Volume Up"},
+            {"rocker-back", "Rocker Back"},
+            {"rocker-forward", "Rocker Forward"}}}) {
+    if (!configuration_->profiles.global_actions.contains(id)) continue;
+    const std::wstring label = wide(name);
+    ::SendDlgItemMessageW(window_, gestures_id, LB_ADDSTRING, 0,
+                          reinterpret_cast<LPARAM>(label.c_str()));
+    action_gesture_ids_.push_back(id);
+  }
   if (!configuration_->gestures.gestures.empty())
     ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, 0, 0);
   refresh_preview();
@@ -249,6 +273,18 @@ void GestureEditor::refresh() {
 void GestureEditor::load() {
   const int chosen = index();
   if (chosen < 0) {
+    ::SetDlgItemTextW(window_, gesture_name_id, L"");
+    std::string summary;
+    const auto action = configuration_->profiles.global_actions.find(selected_action_id_);
+    if (action != configuration_->profiles.global_actions.end())
+      summary = actions::action_display_name(action->second);
+    ::SetDlgItemTextW(window_, shortcut_id, wide(summary).c_str());
+    for (const int id : {gesture_rename_id, gesture_delete_id, gesture_train_id,
+                         gesture_toggle_id, gesture_remove_sample_id})
+      ::EnableWindow(::GetDlgItem(window_, id), FALSE);
+    ::EnableWindow(::GetDlgItem(window_, global_assign_id), !selected_action_id_.empty());
+    ::EnableWindow(::GetDlgItem(window_, global_remove_id),
+                   action != configuration_->profiles.global_actions.end());
     refresh_preview();
     return;
   }
@@ -265,6 +301,9 @@ void GestureEditor::load() {
   ::EnableWindow(::GetDlgItem(window_, global_assign_id), TRUE);
   ::EnableWindow(::GetDlgItem(window_, global_remove_id),
                  action != configuration_->profiles.global_actions.end());
+  for (const int id : {gesture_rename_id, gesture_delete_id, gesture_train_id,
+                       gesture_toggle_id, gesture_remove_sample_id})
+    ::EnableWindow(::GetDlgItem(window_, id), TRUE);
   refresh_preview();
 }
 
@@ -373,8 +412,9 @@ void GestureEditor::toggle() {
 
 void GestureEditor::assign() {
   const int chosen = index();
-  if (chosen < 0) return;
-  const auto& gesture_id = configuration_->gestures.gestures[static_cast<std::size_t>(chosen)].id;
+  const std::string gesture_id = selected();
+  if (gesture_id.empty()) return;
+  const bool input_trigger = chosen < 0;
   auto existing = configuration_->profiles.global_actions.find(gesture_id);
   WindowsActionEditor editor;
   auto result = editor.edit(instance_, window_,
@@ -388,17 +428,25 @@ void GestureEditor::assign() {
   else
     configuration_->profiles.global_actions.erase(gesture_id);
   refresh();
-  ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, chosen, 0);
+  if (input_trigger) {
+    selected_action_id_ = gesture_id;
+    ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL,
+                          static_cast<WPARAM>(CB_ERR), 0);
+    if (preview_) ::SetWindowTextW(preview_, L"No Gesture Assigned");
+  } else {
+    ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, chosen, 0);
+  }
   load();
 }
 
 void GestureEditor::remove_action() {
   const int chosen = index();
-  if (chosen < 0) return;
-  const auto& gesture = configuration_->gestures.gestures[static_cast<std::size_t>(chosen)];
-  configuration_->profiles.global_actions.erase(gesture.id);
+  const std::string gesture_id = selected();
+  if (gesture_id.empty()) return;
+  configuration_->profiles.global_actions.erase(gesture_id);
   refresh();
-  ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, chosen, 0);
+  if (chosen >= 0)
+    ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, chosen, 0);
   load();
 }
 
@@ -408,7 +456,17 @@ void GestureEditor::select_action() {
   const auto found = std::ranges::find(configuration_->gestures.gestures,
                                        action_gesture_ids_[static_cast<std::size_t>(selected)],
                                        &gestures::GestureDefinition::id);
-  if (found == configuration_->gestures.gestures.end()) return;
+  if (found == configuration_->gestures.gestures.end()) {
+    selected_action_id_ = action_gesture_ids_[static_cast<std::size_t>(selected)];
+    ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL,
+                          static_cast<WPARAM>(CB_ERR), 0);
+    ::SetDlgItemTextW(window_, gesture_name_id, L"");
+    if (preview_) ::SetWindowTextW(preview_, L"No Gesture Assigned");
+    load();
+    return;
+  }
+  selected_action_id_.clear();
+  if (preview_) ::SetWindowTextW(preview_, L"");
   const auto index = static_cast<LRESULT>(found - configuration_->gestures.gestures.begin());
   ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, index, 0);
   load();

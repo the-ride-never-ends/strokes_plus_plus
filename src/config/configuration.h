@@ -38,13 +38,13 @@ struct GlobalOptions {
 };
 
 struct GestureFile {
-  static constexpr int current_version = 3;
+  static constexpr int current_version = 4;
   int version{current_version};
   std::vector<gestures::GestureDefinition> gestures;
 };
 
 struct ProfileFile {
-  static constexpr int current_version = 2;
+  static constexpr int current_version = 3;
   int version{current_version};
   std::vector<context::ApplicationProfile> profiles;
   actions::ActionResolver::GlobalActions global_actions;

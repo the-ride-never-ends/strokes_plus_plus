@@ -54,6 +54,7 @@ class GestureEditor {
   config::ConfigurationBundle* configuration_;
   HWND preview_{};
   std::vector<std::string> action_gesture_ids_;
+  std::string selected_action_id_;
 };
 
 }  // namespace strokes::ui

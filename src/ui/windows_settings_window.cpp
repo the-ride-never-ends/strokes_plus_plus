@@ -380,9 +380,23 @@ void WindowsSettingsWindow::load_help() const noexcept {
       L"records another example, and Remove last sample removes its newest example. Enable / "
       L"Disable controls recognition independently of action assignment.");
   row(L"Global action",
-      L"An optional action used when no matching application profile overrides it. Configure opens "
+      L"An optional action used when no matching application profile overrides it. Add / Edit "
+      L"Action opens "
       L"the action editor, where you can choose a keyboard shortcut, program, URI, mouse, window, "
       L"media, volume, or virtual-desktop action. Removing an action does not remove the pattern.");
+  row(L"Assigned action",
+      L"Shows the action's actual details, such as Ctrl+C, rather than only its action type. The "
+      L"list at left uses shorter task labels such as Copy, Minimize, or Next Track.");
+  row(L"Input-only actions",
+      L"Wheel and rocker actions are triggered by mouse-button combinations instead of a drawn "
+      L"pattern. Selecting one clears the gesture fields and displays No Gesture Assigned while "
+      L"keeping its action available for editing.");
+  row(L"Wheel triggers",
+      L"Hold the right mouse button and scroll up or down to change volume. These actions do not "
+      L"have gesture drawings.");
+  row(L"Rocker triggers",
+      L"Hold right and click left for Back. Hold left and click right for Forward. These actions "
+      L"do not have gesture drawings.");
   section(L"Applications");
   row(L"Profiles",
       L"Let the same gesture perform different actions in different applications. Add, Rename, "
@@ -394,9 +408,12 @@ void WindowsSettingsWindow::load_help() const noexcept {
   row(L"Override action",
       L"Replaces the global action for the selected gesture when this profile matches. Configure "
       L"override opens the same action editor.");
+  row(L"Built-in profiles",
+      L"Chrome overrides Right Up for New Tab, Up Down for Reload, and Left Down for Reopen Closed "
+      L"Tab. Excel overrides Right and Left for the next and previous worksheet.");
   section(L"Gestures");
   row(L"Inventory",
-      L"Shows all 36 built-in direction patterns, including patterns that have no global or "
+      L"Shows all 41 built-in direction and letter-shaped patterns, including patterns that have no global or "
       L"application action assigned.");
   row(L"Activated",
       L"Shows enabled patterns in blue. Activated means the pattern can be recognized; it does not "
@@ -405,7 +422,12 @@ void WindowsSettingsWindow::load_help() const noexcept {
       L"Shows disabled patterns in gray. They remain in the catalog and can be enabled later.");
   row(L"Pattern names",
       L"Names record the stroke directions in drawing order. Diagonal names include both vertical "
-      L"and horizontal direction; multi-part names list each successive direction.");
+      L"and horizontal direction; multi-part names list each successive direction. Letter-shaped "
+      L"patterns are named M, P, e, and C for the shape that is drawn.");
+  row(L"Default mappings",
+      L"The built-in StrokesPlus.net-style defaults cover copy, paste, select all, screen capture, "
+      L"delete, escape, media control, Explorer, window management, and tab navigation. Defaults "
+      L"can be edited or removed without deleting their gesture patterns.");
   row(L"Direction arrows",
       L"The arrowhead shows drawing direction in the preview only. It is not stored as part of the "
       L"gesture sample.");
