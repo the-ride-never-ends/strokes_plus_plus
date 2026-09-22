@@ -11,6 +11,7 @@
 #include "config/configuration_store.h"
 #include "config/windows_app_data.h"
 #include "context/windows_application_context.h"
+#include "context/windows_shell_surface.h"
 #include "engine/gesture_engine.h"
 #include "gestures/recognizer.h"
 #include "input/event_pump.h"
@@ -318,15 +319,10 @@ class EngineHost {
 
   static bool handle_mouse(const input::MouseInputEvent& event, void* context) noexcept {
     auto& host = *static_cast<EngineHost*>(context);
-    if (event.type == input::MouseEventType::button_down ||
-        event.type == input::MouseEventType::button_up) {
+    if (event.type == input::MouseEventType::button_down) {
       POINT point{static_cast<LONG>(event.position.x), static_cast<LONG>(event.position.y)};
-      HWND target = ::GetAncestor(::WindowFromPoint(point), GA_ROOT);
-      wchar_t class_name[64]{};
-      if (target != nullptr) ::GetClassNameW(target, class_name, 64);
-      if (::lstrcmpW(class_name, L"Shell_TrayWnd") == 0 ||
-          ::lstrcmpW(class_name, L"Shell_SecondaryTrayWnd") == 0 ||
-          ::lstrcmpW(class_name, L"NotifyIconOverflowWindow") == 0) {
+      HWND target = ::WindowFromPoint(point);
+      if (context::is_protected_shell_window(reinterpret_cast<std::uintptr_t>(target))) {
         return false;
       }
     }

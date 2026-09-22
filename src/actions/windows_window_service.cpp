@@ -5,6 +5,7 @@
 #include <Windows.h>
 
 #include "context/windows_application_context.h"
+#include "context/windows_shell_surface.h"
 
 namespace strokes::actions {
 namespace {
@@ -79,6 +80,10 @@ ActionResult WindowsWindowService::perform(WindowOperation operation, std::uintp
   if (!::IsWindow(handle)) {
     return ActionResult::failed(ActionError::invalid_runtime_target, "window_not_found",
                                 "The target window no longer exists.");
+  }
+  if (context::is_protected_shell_window(window)) {
+    return ActionResult::failed(ActionError::invalid_runtime_target, "protected_shell_window",
+                                "Windows shell surfaces cannot be changed by window actions.");
   }
   switch (operation) {
     case WindowOperation::close:

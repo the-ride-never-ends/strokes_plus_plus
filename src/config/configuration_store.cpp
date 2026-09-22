@@ -388,8 +388,8 @@ std::vector<gestures::GestureDefinition> built_in_gestures() {
   result.push_back(built_in("letter-p", "P", true,
                             {{0, 100}, {0, 0}, {70, 0}, {85, 35}, {70, 60}, {0, 60}}));
   result.push_back(built_in("letter-e", "e", true,
-                            {{90, 60}, {20, 60}, {10, 35}, {35, 15}, {80, 20}, {90, 60},
-                             {70, 95}, {20, 90}}));
+                            {{0, 60}, {70, 60}, {80, 35}, {55, 15}, {10, 20}, {0, 60},
+                             {20, 95}, {70, 90}}));
   result.push_back(built_in("letter-c", "C", true,
                             {{90, 15}, {55, 0}, {20, 15}, {0, 50}, {20, 85}, {55, 100},
                              {90, 85}}));
@@ -442,6 +442,11 @@ void migrate_gesture_catalog(ConfigurationBundle& configuration) {
       if (found->id == "down-right-up-left") found->name = "Rectangle / Box";
       if (found->id == "slash-up-down" || found->id == "backslash-up-down")
         found->enabled = true;
+    }
+    if (configuration.gestures.version < 5 && already_present && found->id == "letter-e") {
+      const auto old_sample = std::ranges::find(found->templates, "built-in-letter-e",
+                                                 &gestures::GestureTemplate::id);
+      if (old_sample != found->templates.end()) old_sample->points = gesture.templates[0].points;
     }
   }
   configuration.gestures.version = GestureFile::current_version;

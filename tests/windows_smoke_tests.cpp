@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "context/windows_application_context.h"
+#include "context/windows_shell_surface.h"
 #include "actions/windows_keyboard_input.h"
 #include "actions/windows_audio_service.h"
 #include "actions/windows_mouse_service.h"
@@ -62,6 +63,15 @@ BOOL CALLBACK check_child_bounds(HWND child, LPARAM context) {
 
 int main() {
   using namespace strokes;
+  for (const auto class_name : {L"Shell_TrayWnd", L"Shell_SecondaryTrayWnd",
+                                L"NotifyIconOverflowWindow",
+                                L"TopLevelWindowForOverflowXamlIsland"}) {
+    check(context::is_protected_shell_class(class_name),
+          "taskbar and notification-overflow window classes are protected from gestures");
+  }
+  check(!context::is_protected_shell_class(L"ApplicationFrameWindow") &&
+            !context::is_protected_shell_class(L"Windows.UI.Core.CoreWindow"),
+        "generic application and XAML windows remain valid gesture targets");
   check(actions::WindowsAudioService::adjusted_level(
             0.50F, actions::VolumeOperation::increase, 7.5) == 0.575F,
         "volume increase honors its configured percentage");

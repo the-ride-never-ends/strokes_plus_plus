@@ -38,7 +38,7 @@ struct GlobalOptions {
 };
 
 struct GestureFile {
-  static constexpr int current_version = 4;
+  static constexpr int current_version = 5;
   int version{current_version};
   std::vector<gestures::GestureDefinition> gestures;
 };

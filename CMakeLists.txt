@@ -75,6 +75,7 @@ if(WIN32)
         src/actions/windows_user_feedback_service.cpp
         src/actions/windows_window_service.cpp
         src/context/windows_application_context.cpp
+        src/context/windows_shell_surface.cpp
         src/config/windows_app_data.cpp
         src/input/windows_mouse_click.cpp
         src/input/windows_keyboard_hook.cpp

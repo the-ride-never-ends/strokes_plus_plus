@@ -142,6 +142,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   gave the engine an explicit, named Lua execution limit instead of relying on a constructor
   default.
 - Captured a window's application context once per Lua window query instead of once per property.
+- Prevented gestures and window actions from minimizing or otherwise changing the Windows taskbar
+  and notification-area flyouts, including the Windows 11 XAML hidden-icons panel, which could
+  leave the notification-area caret active while its panel remained inaccessible.
+- Corrected the horizontally mirrored built-in `e` gesture and migrated its built-in sample in
+  existing configurations without changing user-trained samples.
 
 ### Tests
 

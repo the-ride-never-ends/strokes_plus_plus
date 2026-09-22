@@ -152,7 +152,7 @@ void legacy_catalog_migration() {
   std::string error;
   check(store.save(legacy, error), "legacy gesture catalog fixture saves");
   const auto migrated = store.load();
-  check(migrated && migrated.value->gestures.version == 4 &&
+  check(migrated && migrated.value->gestures.version == 5 &&
             migrated.value->gestures.gestures.size() == 41,
         "version-one gesture files gain the complete direction-pattern catalog");
   check(migrated && migrated.value->profiles.global_actions.contains("slash-down") &&
@@ -182,11 +182,42 @@ void diagonal_label_migration() {
   std::string error;
   check(store.save(version_two, error), "version-two diagonal-label fixture saves");
   const auto migrated = store.load();
-  check(migrated && migrated.value->gestures.version == 4 &&
+  check(migrated && migrated.value->gestures.version == 5 &&
             migrated.value->gestures.gestures[0].name == "Diagonal Down-Left" &&
             migrated.value->gestures.gestures[1].name == "Diagonal Up-Right" &&
             migrated.value->gestures.gestures[30].name == "Up Right / Down Left",
         "version-two slash labels migrate to explicit diagonal directions");
+}
+
+void letter_e_orientation_migration() {
+  TemporaryDirectory temp;
+  config::ConfigurationStore store(temp.path);
+  auto version_four = config::ConfigurationStore::defaults();
+  version_four.gestures.version = 4;
+  const auto letter_e = std::ranges::find(version_four.gestures.gestures, "letter-e",
+                                          &gestures::GestureDefinition::id);
+  check(letter_e != version_four.gestures.gestures.end(),
+        "letter-e orientation fixture contains the built-in gesture");
+  if (letter_e == version_four.gestures.gestures.end()) return;
+  letter_e->templates[0].points =
+      {{90, 60}, {20, 60}, {10, 35}, {35, 15}, {80, 20}, {90, 60}, {70, 95}, {20, 90}};
+  letter_e->templates.push_back({"user-letter-e", {{1, 2}, {3, 4}}});
+  std::string error;
+  check(store.save(version_four, error), "version-four letter-e fixture saves");
+  const auto migrated = store.load();
+  const auto migrated_e =
+      migrated ? std::ranges::find(migrated.value->gestures.gestures, "letter-e",
+                                   &gestures::GestureDefinition::id)
+               : version_four.gestures.gestures.end();
+  check(migrated && migrated.value->gestures.version == 5 &&
+            migrated_e != migrated.value->gestures.gestures.end() &&
+            migrated_e->templates[0].points.front() == gestures::Point{0, 60} &&
+            migrated_e->templates[0].points.back() == gestures::Point{70, 90},
+        "version-four built-in letter-e samples migrate to the correct orientation");
+  check(migrated && migrated_e != migrated.value->gestures.gestures.end() &&
+            migrated_e->templates.size() == 2 && migrated_e->templates[1].id == "user-letter-e" &&
+            migrated_e->templates[1].points.front() == gestures::Point{1, 2},
+        "letter-e migration preserves user-trained samples");
 }
 
 void default_action_migration() {
@@ -267,6 +298,7 @@ void run_configuration_store_tests() {
   malformed_and_recovery();
   legacy_catalog_migration();
   diagonal_label_migration();
+  letter_e_orientation_migration();
   default_action_migration();
   interrupted_bundle_transaction();
   interrupted_first_save();
