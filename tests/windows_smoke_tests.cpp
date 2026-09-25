@@ -370,9 +370,18 @@ int main() {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
   check(add_window != nullptr && ::IsWindowVisible(add_window) &&
-            ::SendDlgItemMessageW(add_window, 5028, CB_GETCOUNT, 0, 0) == 23 &&
+            ::SendDlgItemMessageW(add_window, 5028, CB_GETCOUNT, 0, 0) == 20 &&
+            ::SendDlgItemMessageW(add_window, 5028, CB_FINDSTRINGEXACT,
+                                  static_cast<WPARAM>(-1),
+                                  reinterpret_cast<LPARAM>(L"Rectangle / Box")) == CB_ERR &&
+            ::SendDlgItemMessageW(add_window, 5028, CB_FINDSTRINGEXACT,
+                                  static_cast<WPARAM>(-1),
+                                  reinterpret_cast<LPARAM>(L"Right Up")) == CB_ERR &&
+            ::SendDlgItemMessageW(add_window, 5028, CB_FINDSTRINGEXACT,
+                                  static_cast<WPARAM>(-1),
+                                  reinterpret_cast<LPARAM>(L"Left Down")) == CB_ERR &&
             !::IsWindowVisible(::GetDlgItem(add_window, 5018)),
-        "Add Action opens a fresh editor limited to unassigned triggers");
+        "Add Action excludes gestures assigned globally or in application profiles");
   if (add_window != nullptr) {
     ::SetDlgItemTextW(add_window, 5005, L"CTRL+SHIFT+F12");
     (void)::SendMessageW(add_window, WM_COMMAND, MAKEWPARAM(5019, BN_CLICKED), 0);

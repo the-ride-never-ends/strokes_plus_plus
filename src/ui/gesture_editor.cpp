@@ -272,10 +272,10 @@ void GestureEditor::refresh() {
   }
   bool has_unassigned = std::ranges::any_of(
       configuration_->gestures.gestures, [this](const auto& gesture) {
-        return !configuration_->profiles.global_actions.contains(gesture.id);
+        return !has_action(gesture.id);
       });
   for (const char* id : {"wheel-down", "wheel-up", "rocker-back", "rocker-forward"})
-    has_unassigned |= !configuration_->profiles.global_actions.contains(id);
+    has_unassigned |= !has_action(id);
   ::EnableWindow(::GetDlgItem(window_, global_add_id), has_unassigned);
   if (!configuration_->gestures.gestures.empty())
     ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, 0, 0);
@@ -427,13 +427,12 @@ void GestureEditor::toggle() {
 void GestureEditor::add_action() {
   std::vector<GlobalActionTarget> targets;
   for (const auto& gesture : configuration_->gestures.gestures) {
-    if (!configuration_->profiles.global_actions.contains(gesture.id))
-      targets.push_back({gesture.id, gesture.name});
+    if (!has_action(gesture.id)) targets.push_back({gesture.id, gesture.name});
   }
   for (const auto& [id, name] : std::array<std::pair<const char*, const char*>, 4>{
            {{"wheel-down", "Wheel Down"}, {"wheel-up", "Wheel Up"},
             {"rocker-back", "Rocker Back"}, {"rocker-forward", "Rocker Forward"}}}) {
-    if (!configuration_->profiles.global_actions.contains(id)) targets.push_back({id, name});
+    if (!has_action(id)) targets.push_back({id, name});
   }
   if (targets.empty()) return;
   WindowsActionEditor editor;
@@ -455,6 +454,13 @@ void GestureEditor::add_action() {
                           0);
   }
   load();
+}
+
+bool GestureEditor::has_action(const std::string& gesture_id) const {
+  if (configuration_->profiles.global_actions.contains(gesture_id)) return true;
+  return std::ranges::any_of(configuration_->profiles.profiles, [&](const auto& profile) {
+    return profile.actions_by_gesture.contains(gesture_id);
+  });
 }
 
 void GestureEditor::edit_action() {

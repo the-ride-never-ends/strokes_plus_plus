@@ -25,6 +25,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Split the combined global-action command into Add Action and Edit Action. Add opens the action
   editor with a picker for unassigned gestures and wheel or rocker triggers; Edit changes only the
   selected existing mapping.
+- Excluded gestures already mapped in application profiles from the Add Action picker, in addition
+  to those with global mappings.
+- Clarified Help for the separate Add, Edit, and Delete Action controls and Add Action's gesture
+  picker.
 
 ### Phase 3 Lua scripting
 

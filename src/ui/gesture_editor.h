@@ -48,6 +48,7 @@ class GestureEditor {
   void edit_action();
   void remove_action();
   void select_action();
+  [[nodiscard]] bool has_action(const std::string& gesture_id) const;
   [[nodiscard]] int index() const noexcept;
 
   HWND window_;

@@ -372,18 +372,19 @@ void WindowsSettingsWindow::load_help() const noexcept {
   row(L"Recognition threshold", recognition_threshold_help);
   section(L"Global Actions");
   row(L"Pattern selection",
-      L"Selects a gesture pattern for editing or action assignment. Pattern names describe how "
-      L"the gesture is drawn, such as Down Right or Diagonal Up-Right; they do not describe the "
-      L"attached action.");
+      L"Selects a gesture pattern for preview, training, and editing. Add Action has its own "
+      L"gesture picker. Pattern names describe how the gesture is drawn, such as Down Right or "
+      L"Diagonal Up-Right; they do not describe the attached action.");
   row(L"Pattern editing",
       L"Add creates a pattern, Rename changes its direction-based name, Delete removes it, Train "
       L"records another example, and Remove last sample removes its newest example. Enable / "
       L"Disable controls recognition independently of action assignment.");
   row(L"Global action",
       L"An optional action used when no matching application profile overrides it. Add Action "
-      L"opens an editor with unassigned gestures and triggers; Edit Action changes the selected "
-      L"mapping. Choose a keyboard shortcut, program, URI, mouse, window, media, volume, "
-      L"virtual-desktop, or Lua script action. Deleting an action does not remove the pattern.");
+      L"opens a blank editor and lists only gestures or triggers with no global or application "
+      L"action. Edit Action opens the selected existing global action; Delete Action removes its "
+      L"mapping without removing the gesture pattern. Actions can use a keyboard shortcut, "
+      L"program, URI, mouse, window, media, volume, virtual desktop, or Lua script.");
   row(L"Assigned action",
       L"Shows the action's actual details, such as Ctrl+C, rather than only its action type. The "
       L"list at left uses shorter task labels such as Copy, Minimize, or Next Track.");
