@@ -29,9 +29,9 @@ using detail::wide;
 void GestureEditor::create() {
   text(window_, gesture_section_label_id, L"Global Actions", 25, 50, 230);
   control(window_, L"LISTBOX", L"", LBS_NOTIFY | WS_VSCROLL, gestures_id, 25, 75, 235, 430);
-  control(window_, L"BUTTON", L"Add / Edit Action", BS_PUSHBUTTON, global_assign_id, 25, 515, 112,
-          28);
-  control(window_, L"BUTTON", L"Delete Action", BS_PUSHBUTTON, global_remove_id, 145, 515, 115, 28);
+  control(window_, L"BUTTON", L"Add Action", BS_PUSHBUTTON, global_add_id, 25, 515, 75, 28);
+  control(window_, L"BUTTON", L"Edit Action", BS_PUSHBUTTON, global_assign_id, 105, 515, 75, 28);
+  control(window_, L"BUTTON", L"Delete Action", BS_PUSHBUTTON, global_remove_id, 185, 515, 75, 28);
 
   text(window_, global_action_label_id, L"Gesture", 280, 50, 320);
   control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, gesture_select_id, 280, 75, 320, 300);
@@ -64,7 +64,8 @@ void GestureEditor::set_visible(bool visible) const noexcept {
   for (const int id : {gesture_section_label_id, global_action_label_id, assigned_action_label_id,
                        shortcut_id, gestures_id, gesture_select_id, gesture_name_id,
                        gesture_add_id, gesture_rename_id, gesture_delete_id, gesture_train_id,
-                       gesture_remove_sample_id, gesture_toggle_id, global_assign_id,
+                       gesture_remove_sample_id, gesture_toggle_id, global_add_id,
+                       global_assign_id,
                        global_remove_id})
     ::ShowWindow(::GetDlgItem(window_, id), visible ? SW_SHOW : SW_HIDE);
   ::ShowWindow(preview_, visible ? SW_SHOW : SW_HIDE);
@@ -203,8 +204,12 @@ bool GestureEditor::handle(int command, int notification) {
     toggle();
     return true;
   }
+  if (command == global_add_id) {
+    add_action();
+    return true;
+  }
   if (command == global_assign_id) {
-    assign();
+    edit_action();
     return true;
   }
   if (command == global_remove_id) {
@@ -265,6 +270,13 @@ void GestureEditor::refresh() {
                           reinterpret_cast<LPARAM>(label.c_str()));
     action_gesture_ids_.push_back(id);
   }
+  bool has_unassigned = std::ranges::any_of(
+      configuration_->gestures.gestures, [this](const auto& gesture) {
+        return !configuration_->profiles.global_actions.contains(gesture.id);
+      });
+  for (const char* id : {"wheel-down", "wheel-up", "rocker-back", "rocker-forward"})
+    has_unassigned |= !configuration_->profiles.global_actions.contains(id);
+  ::EnableWindow(::GetDlgItem(window_, global_add_id), has_unassigned);
   if (!configuration_->gestures.gestures.empty())
     ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL, 0, 0);
   refresh_preview();
@@ -282,7 +294,8 @@ void GestureEditor::load() {
     for (const int id : {gesture_rename_id, gesture_delete_id, gesture_train_id,
                          gesture_toggle_id, gesture_remove_sample_id})
       ::EnableWindow(::GetDlgItem(window_, id), FALSE);
-    ::EnableWindow(::GetDlgItem(window_, global_assign_id), !selected_action_id_.empty());
+    ::EnableWindow(::GetDlgItem(window_, global_assign_id),
+                   action != configuration_->profiles.global_actions.end());
     ::EnableWindow(::GetDlgItem(window_, global_remove_id),
                    action != configuration_->profiles.global_actions.end());
     refresh_preview();
@@ -298,7 +311,8 @@ void GestureEditor::load() {
   ::SetDlgItemTextW(window_, shortcut_id, wide(summary).c_str());
   ::SendDlgItemMessageW(window_, shortcut_id, EM_SETREADONLY, TRUE, 0);
   ::EnableWindow(::GetDlgItem(window_, shortcut_id), TRUE);
-  ::EnableWindow(::GetDlgItem(window_, global_assign_id), TRUE);
+  ::EnableWindow(::GetDlgItem(window_, global_assign_id),
+                 action != configuration_->profiles.global_actions.end());
   ::EnableWindow(::GetDlgItem(window_, global_remove_id),
                  action != configuration_->profiles.global_actions.end());
   for (const int id : {gesture_rename_id, gesture_delete_id, gesture_train_id,
@@ -410,17 +424,48 @@ void GestureEditor::toggle() {
   load();
 }
 
-void GestureEditor::assign() {
+void GestureEditor::add_action() {
+  std::vector<GlobalActionTarget> targets;
+  for (const auto& gesture : configuration_->gestures.gestures) {
+    if (!configuration_->profiles.global_actions.contains(gesture.id))
+      targets.push_back({gesture.id, gesture.name});
+  }
+  for (const auto& [id, name] : std::array<std::pair<const char*, const char*>, 4>{
+           {{"wheel-down", "Wheel Down"}, {"wheel-up", "Wheel Up"},
+            {"rocker-back", "Rocker Back"}, {"rocker-forward", "Rocker Forward"}}}) {
+    if (!configuration_->profiles.global_actions.contains(id)) targets.push_back({id, name});
+  }
+  if (targets.empty()) return;
+  WindowsActionEditor editor;
+  auto result = editor.add_global(instance_, window_, std::move(targets), selected());
+  if (!result.accepted || !result.action || result.gesture_id.empty()) return;
+  const std::string gesture_id = std::move(result.gesture_id);
+  configuration_->profiles.global_actions.emplace(gesture_id, std::move(*result.action));
+  refresh();
+  const auto found = std::ranges::find(configuration_->gestures.gestures, gesture_id,
+                                       &gestures::GestureDefinition::id);
+  if (found == configuration_->gestures.gestures.end()) {
+    selected_action_id_ = gesture_id;
+    ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL,
+                          static_cast<WPARAM>(CB_ERR), 0);
+    if (preview_) ::SetWindowTextW(preview_, L"No Gesture Assigned");
+  } else {
+    ::SendDlgItemMessageW(window_, gesture_select_id, CB_SETCURSEL,
+                          static_cast<WPARAM>(found - configuration_->gestures.gestures.begin()),
+                          0);
+  }
+  load();
+}
+
+void GestureEditor::edit_action() {
   const int chosen = index();
   const std::string gesture_id = selected();
   if (gesture_id.empty()) return;
   const bool input_trigger = chosen < 0;
   auto existing = configuration_->profiles.global_actions.find(gesture_id);
+  if (existing == configuration_->profiles.global_actions.end()) return;
   WindowsActionEditor editor;
-  auto result = editor.edit(instance_, window_,
-                            existing == configuration_->profiles.global_actions.end()
-                                ? nullptr
-                                : &existing->second);
+  auto result = editor.edit(instance_, window_, &existing->second);
   if (!result.accepted) return;
   if (result.action)
     configuration_->profiles.global_actions.insert_or_assign(gesture_id,

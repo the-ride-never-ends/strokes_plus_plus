@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.10.0]
 
+### Packaging
+
+- Built the 0.10.0 Windows NSIS64 executable installer and its SHA-256 checksum from the Release
+  configuration.
+- Made the idle performance gate detach its verified input hooks before measuring resources, so
+  unrelated mouse activity on the test desktop cannot make an active host look like a failed idle
+  host. A failed sample reports measured CPU time, working set, and query status.
+- Passed CMake and CTest arguments explicitly in the development runner so configuring a fresh build
+  directory does not fail PowerShell parameter binding on `-S`.
+- Made the development runner use an alternate build directory when its target executable is in
+  use, allowing build-and-test runs while Strokes++ is running.
+
+### Global Actions labels
+
+- Labeled the built-in screen snip and tab shortcuts by their actions, and displayed the actual
+  keys for shortcuts with no known action label.
+- Split the combined global-action command into Add Action and Edit Action. Add opens the action
+  editor with a picker for unassigned gestures and wheel or rocker triggers; Edit changes only the
+  selected existing mapping.
+
 ### Phase 3 Lua scripting
 
 - Added the first-class Lua action definition and inline-script persistence for global and

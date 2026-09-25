@@ -380,11 +380,10 @@ void WindowsSettingsWindow::load_help() const noexcept {
       L"records another example, and Remove last sample removes its newest example. Enable / "
       L"Disable controls recognition independently of action assignment.");
   row(L"Global action",
-      L"An optional action used when no matching application profile overrides it. Add / Edit "
-      L"Action opens "
-      L"the action editor, where you can choose a keyboard shortcut, program, URI, mouse, window, "
-      L"media, volume, virtual-desktop, or Lua script action. Removing an action does not remove "
-      L"the pattern.");
+      L"An optional action used when no matching application profile overrides it. Add Action "
+      L"opens an editor with unassigned gestures and triggers; Edit Action changes the selected "
+      L"mapping. Choose a keyboard shortcut, program, URI, mouse, window, media, volume, "
+      L"virtual-desktop, or Lua script action. Deleting an action does not remove the pattern.");
   row(L"Assigned action",
       L"Shows the action's actual details, such as Ctrl+C, rather than only its action type. The "
       L"list at left uses shorter task labels such as Copy, Minimize, or Next Track.");

@@ -18,6 +18,29 @@ $buildPath = if ([System.IO.Path]::IsPathRooted($BuildDirectory)) {
     Join-Path $repositoryRoot $BuildDirectory
 }
 
+function Test-ExecutableLocked {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    try {
+        $stream = [System.IO.File]::Open($Path, 'Open', 'ReadWrite', 'None')
+        $stream.Dispose()
+        return $false
+    } catch [System.IO.IOException] {
+        return $true
+    }
+}
+
+$requestedBuildPath = $buildPath
+for ($attempt = 0; $attempt -lt 10; $attempt++) {
+    $executable = Join-Path $buildPath "$Configuration\StrokesPlusPlus.exe"
+    if (-not (Test-ExecutableLocked $executable)) { break }
+    $buildPath = "$requestedBuildPath-staging$($attempt + 1)"
+    Write-Host "The application is running from $executable; building in $buildPath instead."
+}
+if (Test-ExecutableLocked (Join-Path $buildPath "$Configuration\StrokesPlusPlus.exe")) {
+    throw 'No unlocked build directory was found.'
+}
+
 function Find-CMake {
     if ($env:STROKES_CMAKE -and (Test-Path -LiteralPath $env:STROKES_CMAKE -PathType Leaf)) {
         return (Resolve-Path -LiteralPath $env:STROKES_CMAKE).Path
@@ -56,18 +79,18 @@ $ctest = Join-Path (Split-Path -Parent $cmake) 'ctest.exe'
 
 if (-not (Test-Path -LiteralPath (Join-Path $buildPath 'CMakeCache.txt'))) {
     Write-Host "Configuring Strokes++ in $buildPath"
-    Invoke-Checked $cmake -S $repositoryRoot -B $buildPath -A x64
+    Invoke-Checked -Program $cmake -Arguments @('-S', $repositoryRoot, '-B', $buildPath, '-A', 'x64')
 }
 
 Write-Host "Building Strokes++ ($Configuration)"
-Invoke-Checked $cmake --build $buildPath --config $Configuration --parallel
+Invoke-Checked -Program $cmake -Arguments @('--build', $buildPath, '--config', $Configuration, '--parallel')
 
 if ($Test) {
     if (-not (Test-Path -LiteralPath $ctest -PathType Leaf)) {
         throw "CTest was not found beside CMake: $ctest"
     }
     Write-Host 'Running tests'
-    Invoke-Checked $ctest --test-dir $buildPath -C $Configuration --output-on-failure -LE performance
+    Invoke-Checked -Program $ctest -Arguments @('--test-dir', $buildPath, '-C', $Configuration, '--output-on-failure', '-LE', 'performance')
 }
 
 if (-not $NoRun) {

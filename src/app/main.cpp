@@ -34,6 +34,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <cwchar>
@@ -180,6 +181,13 @@ class EngineHost {
     }
     save_worker_ = std::jthread([this](std::stop_token stop) { save_loop(stop); });
     if (logger_) (void)logger_->log("hook_installation");
+    if (idle_test) {
+      // The resource gate measures an idle host even when the test runner's desktop is active.
+      // Hook installation was verified above; detach from external input before sampling.
+      keyboard_hook_.stop();
+      hook_.stop();
+      stop_foreground();
+    }
 
     MSG message{};
     std::jthread idle_monitor;
@@ -205,9 +213,15 @@ class EngineHost {
                                                         ticks(user_after) - ticks(user_before)) /
                                         10000.0
                                   : 1000.0;
-        idle_test_passed_.store(
-            memory && cpu_ms < 50.0 && counters.WorkingSetSize < 50ull * 1024ull * 1024ull,
-            std::memory_order_release);
+        const bool passed = before && after && memory && cpu_ms < 50.0 &&
+                            counters.WorkingSetSize < 50ull * 1024ull * 1024ull;
+        if (!passed) {
+          std::fprintf(stderr, "Idle test failed: CPU %.2f ms, working set %zu bytes, "
+                               "process times %d/%d, memory query %d\n",
+                       cpu_ms, static_cast<std::size_t>(counters.WorkingSetSize), before, after,
+                       memory);
+        }
+        idle_test_passed_.store(passed, std::memory_order_release);
         (void)::PostThreadMessageW(message_thread, WM_QUIT, 0, 0);
       });
     }

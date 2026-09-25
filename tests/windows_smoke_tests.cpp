@@ -342,8 +342,10 @@ int main() {
         "selecting Global Actions hides options and shows the gesture editor and gesture preview");
   check(::SendDlgItemMessageW(settings_window, ui::gesture_select_id, CB_GETCOUNT, 0, 0) == 41 &&
             ::SendDlgItemMessageW(settings_window, ui::gestures_id, LB_GETCOUNT, 0, 0) == 22 &&
+            ::GetDlgItem(settings_window, ui::global_add_id) != nullptr &&
+            ::GetDlgItem(settings_window, ui::global_assign_id) != nullptr &&
             ::GetDlgItem(settings_window, ui::global_remove_id) != nullptr,
-        "Global Actions separates the full gesture selector from assigned action entries");
+        "Global Actions separates Add, Edit, Delete, gesture selection, and assigned entries");
   (void)::SendDlgItemMessageW(settings_window, ui::gestures_id, LB_SETCURSEL, 21, 0);
   (void)::SendMessageW(settings_window, WM_COMMAND,
                        MAKEWPARAM(ui::gestures_id, LBN_SELCHANGE),
@@ -358,6 +360,46 @@ int main() {
             std::wstring_view(preview_text) == L"No Gesture Assigned" &&
             std::wstring_view(assigned_text) == L"ALT+RIGHT",
         "non-drawn triggers clear gesture fields while retaining their assigned action");
+  (void)::PostMessageW(settings_window, WM_COMMAND,
+                       MAKEWPARAM(ui::global_add_id, BN_CLICKED),
+                       reinterpret_cast<LPARAM>(::GetDlgItem(settings_window, ui::global_add_id)));
+  HWND add_window = nullptr;
+  for (int attempt = 0; attempt < 100; ++attempt) {
+    add_window = ::FindWindowW(L"StrokesPlusPlusActionEditor", L"Add Global Action");
+    if (add_window != nullptr && ::IsWindowVisible(add_window)) break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  check(add_window != nullptr && ::IsWindowVisible(add_window) &&
+            ::SendDlgItemMessageW(add_window, 5028, CB_GETCOUNT, 0, 0) == 23 &&
+            !::IsWindowVisible(::GetDlgItem(add_window, 5018)),
+        "Add Action opens a fresh editor limited to unassigned triggers");
+  if (add_window != nullptr) {
+    ::SetDlgItemTextW(add_window, 5005, L"CTRL+SHIFT+F12");
+    (void)::SendMessageW(add_window, WM_COMMAND, MAKEWPARAM(5019, BN_CLICKED), 0);
+  }
+  for (int attempt = 0; attempt < 100 &&
+                        ::SendDlgItemMessageW(settings_window, ui::gestures_id, LB_GETCOUNT, 0,
+                                              0) != 23;
+       ++attempt)
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  check(::SendDlgItemMessageW(settings_window, ui::gestures_id, LB_GETCOUNT, 0, 0) == 23 &&
+            ::IsWindowEnabled(::GetDlgItem(settings_window, ui::global_assign_id)),
+        "saving Add Action creates one mapping and enables Edit Action");
+  (void)::PostMessageW(settings_window, WM_COMMAND,
+                       MAKEWPARAM(ui::global_assign_id, BN_CLICKED),
+                       reinterpret_cast<LPARAM>(::GetDlgItem(settings_window, ui::global_assign_id)));
+  HWND edit_window = nullptr;
+  for (int attempt = 0; attempt < 100; ++attempt) {
+    edit_window = ::FindWindowW(L"StrokesPlusPlusActionEditor", L"Configure Action");
+    if (edit_window != nullptr && ::IsWindowVisible(edit_window)) break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  wchar_t edit_shortcut[64]{};
+  if (edit_window != nullptr) ::GetDlgItemTextW(edit_window, 5005, edit_shortcut, 64);
+  check(edit_window != nullptr && std::wstring_view(edit_shortcut) == L"CTRL+SHIFT+F12",
+        "Edit Action opens the selected mapping with its saved fields");
+  if (edit_window != nullptr)
+    (void)::SendMessageW(edit_window, WM_COMMAND, MAKEWPARAM(5020, BN_CLICKED), 0);
   (void)::SendMessageW(editor_tabs, TCM_SETCURSEL, 2, 0);
   (void)::SendMessageW(settings_window, WM_NOTIFY, ui::editor_tabs_id,
                        reinterpret_cast<LPARAM>(&tab_change));

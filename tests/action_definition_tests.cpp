@@ -944,8 +944,14 @@ void display_name_tests() {
             action_label(ActionDefinition::keyboard("win+up")) == "Maximize" &&
             action_label(ActionDefinition::keyboard("CTRL+N")) == "New",
         "common keyboard actions receive semantic list labels");
-  check(action_label(ActionDefinition::keyboard("CTRL+SHIFT+F12")) == "Keyboard Shortcut",
-        "unknown keyboard combinations retain a concise generic list label");
+  check(action_label(ActionDefinition::keyboard("WIN+SHIFT+S")) == "Screen Snip" &&
+            action_label(ActionDefinition::keyboard("CTRL+W")) == "Close Tab" &&
+            action_label(ActionDefinition::keyboard("CTRL+TAB")) == "Next Tab" &&
+            action_label(ActionDefinition::keyboard("CTRL+SHIFT+TAB")) == "Previous Tab",
+        "default keyboard mappings receive action-specific list labels");
+  check(action_label(ActionDefinition::keyboard("CTRL+SHIFT+F12")) ==
+            "Shortcut: CTRL+SHIFT+F12",
+        "unknown keyboard combinations show their keys in the list label");
   check(action_label(ActionDefinition::keyboard("PAGEDOWN")) == "Page Down" &&
             action_label(ActionDefinition::keyboard("CTRL+HOME")) == "Start of Document" &&
             action_label(ActionDefinition::keyboard("F5")) == "Refresh",

@@ -44,7 +44,8 @@ class GestureEditor {
   void train();
   void drop_sample();
   void toggle();
-  void assign();
+  void add_action();
+  void edit_action();
   void remove_action();
   void select_action();
   [[nodiscard]] int index() const noexcept;

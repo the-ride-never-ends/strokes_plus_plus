@@ -62,6 +62,7 @@ enum : int {
   profile_delete_id,
   profile_toggle_id,
   profile_assign_id,
+  global_add_id,
   global_assign_id,
   global_remove_id,
   help_text_id,

@@ -471,6 +471,9 @@ std::string action_label(const ActionDefinition& definition) {
     if (shortcut == "CTRL+Y") return "Redo";
     if (shortcut == "CTRL+A") return "Select All";
     if (shortcut == "CTRL+N") return "New";
+    if (shortcut == "CTRL+W") return "Close Tab";
+    if (shortcut == "CTRL+TAB") return "Next Tab";
+    if (shortcut == "CTRL+SHIFT+TAB") return "Previous Tab";
     if (shortcut == "CTRL+S") return "Save";
     if (shortcut == "CTRL+P") return "Print";
     if (shortcut == "PAGEDOWN") return "Page Down";
@@ -482,7 +485,8 @@ std::string action_label(const ActionDefinition& definition) {
     if (shortcut == "DELETE") return "Delete";
     if (shortcut == "ESC") return "Escape";
     if (shortcut == "F5") return "Refresh";
-    return "Keyboard Shortcut";
+    if (shortcut == "WIN+SHIFT+S") return "Screen Snip";
+    return "Shortcut: " + value->shortcut;
   }
   if (definition.type == ActionType::process) {
     if (const auto* value = parameters<ProcessParameters>(definition)) {

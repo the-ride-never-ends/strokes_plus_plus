@@ -48,6 +48,8 @@ enum : int {
   lua_help_id,
   help_text_id,
   help_close_id,
+  global_target_id,
+  global_target_label_id,
 };
 
 /// Action-type combo indices. The combo strings, this list and ActionType share one order.
@@ -280,6 +282,27 @@ std::optional<double> number(HWND window, int id) {
 
 ActionEditResult WindowsActionEditor::edit(HINSTANCE instance, HWND owner,
                                            const actions::ActionDefinition* existing) {
+  global_targets_.clear();
+  return edit_impl(instance, owner, existing);
+}
+
+ActionEditResult WindowsActionEditor::add_global(HINSTANCE instance, HWND owner,
+                                                 std::vector<GlobalActionTarget> targets,
+                                                 const std::string& preferred_id) {
+  global_targets_ = std::move(targets);
+  if (global_targets_.empty()) return {};
+  preferred_target_ = 0;
+  for (std::size_t index = 0; index < global_targets_.size(); ++index) {
+    if (global_targets_[index].id == preferred_id) {
+      preferred_target_ = static_cast<int>(index);
+      break;
+    }
+  }
+  return edit_impl(instance, owner, nullptr);
+}
+
+ActionEditResult WindowsActionEditor::edit_impl(HINSTANCE instance, HWND owner,
+                                                const actions::ActionDefinition* existing) {
   instance_ = instance;
   owner_ = owner;
   finished_ = false;
@@ -294,10 +317,12 @@ ActionEditResult WindowsActionEditor::edit(HINSTANCE instance, HWND owner,
   if (registered == 0 && ::GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return {};
   dpi_ = owner ? ::GetDpiForWindow(owner) : ::GetDpiForSystem();
   if (dpi_ == 0) dpi_ = 96;
-  window_ = ::CreateWindowExW(WS_EX_DLGMODALFRAME, class_name, L"Configure Action",
+  window_ = ::CreateWindowExW(WS_EX_DLGMODALFRAME, class_name,
+                              global_targets_.empty() ? L"Configure Action" : L"Add Global Action",
                               WS_CAPTION | WS_SYSMENU | WS_POPUP, CW_USEDEFAULT, CW_USEDEFAULT,
                               ::MulDiv(570, static_cast<int>(dpi_), 96),
-                              ::MulDiv(430, static_cast<int>(dpi_), 96), owner, nullptr, instance,
+                              ::MulDiv(global_targets_.empty() ? 430 : 470,
+                                       static_cast<int>(dpi_), 96), owner, nullptr, instance,
                               this);
   if (!window_) {
     if (registered != 0) ::UnregisterClassW(class_name, instance);
@@ -308,7 +333,7 @@ ActionEditResult WindowsActionEditor::edit(HINSTANCE instance, HWND owner,
   load(existing);
   ::EnableWindow(owner, FALSE);
   ::ShowWindow(window_, SW_SHOW);
-  ::SetFocus(::GetDlgItem(window_, type_id));
+  ::SetFocus(::GetDlgItem(window_, global_targets_.empty() ? type_id : global_target_id));
   ::SetForegroundWindow(window_);
   MSG message{};
   while (!finished_ && ::GetMessageW(&message, nullptr, 0, 0) > 0) {
@@ -378,6 +403,15 @@ LRESULT WindowsActionEditor::handle_message(UINT message, WPARAM wp, LPARAM lp) 
                     MB_OK | MB_ICONERROR);
     } else {
       result_ = {true, std::move(action)};
+      if (!global_targets_.empty()) {
+        const int target = selection(window_, global_target_id);
+        if (target < 0 || static_cast<std::size_t>(target) >= global_targets_.size()) {
+          ::MessageBoxW(window_, L"Select a gesture for the action.", L"Invalid Action",
+                        MB_OK | MB_ICONERROR);
+          return 0;
+        }
+        result_.gesture_id = global_targets_[static_cast<std::size_t>(target)].id;
+      }
       finish(true);
     }
   }
@@ -387,38 +421,50 @@ LRESULT WindowsActionEditor::handle_message(UINT message, WPARAM wp, LPARAM lp) 
 void WindowsActionEditor::create_controls() {
   using detail::control;
   using detail::text;
-  text(window_, 0, L"Action type", 20, 22, 120);
-  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, type_id, 150, 18, 360, 220);
+  const auto y = [this](int top) { return top + (global_targets_.empty() ? 0 : 40); };
+  if (!global_targets_.empty()) {
+    text(window_, global_target_label_id, L"Gesture", 20, 22, 120);
+    control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, global_target_id, 150, 18, 360, 220);
+    for (const auto& target : global_targets_) {
+      const auto name = detail::wide(target.name);
+      ::SendDlgItemMessageW(window_, global_target_id, CB_ADDSTRING, 0,
+                            reinterpret_cast<LPARAM>(name.c_str()));
+    }
+    ::SendDlgItemMessageW(window_, global_target_id, CB_SETCURSEL, preferred_target_, 0);
+  }
+  text(window_, 0, L"Action type", 20, y(22), 120);
+  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, type_id, 150, y(18), 360, 220);
   reset_combo(window_, type_id,
               {L"Keyboard Shortcut", L"Launch Program", L"Open URL / URI", L"Mouse", L"Window",
                L"Media", L"Volume", L"Virtual Desktop", L"Lua Script"});
-  text(window_, operation_label_id, L"Operation", 20, 62, 120);
-  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, operation_id, 150, 58, 360, 220);
-  text(window_, option_label_id, L"Button / target", 20, 102, 120);
-  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, option_id, 150, 98, 360, 180);
-  text(window_, position_label_id, L"Position", 20, 142, 120);
-  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, position_id, 150, 138, 360, 180);
-  text(window_, first_label_id, L"Value", 20, 182, 120);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, first_id, 150, 178, 290, 24);
-  control(window_, L"BUTTON", L"Browse...", BS_PUSHBUTTON, browse_file_id, 444, 178, 66, 24);
-  text(window_, second_label_id, L"Value", 20, 222, 120);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, second_id, 150, 218, 360, 24);
-  text(window_, third_label_id, L"Value", 20, 262, 120);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, third_id, 150, 258, 290, 24);
-  control(window_, L"BUTTON", L"Browse...", BS_PUSHBUTTON, browse_directory_id, 444, 258, 66, 24);
-  text(window_, fourth_label_id, L"Value", 20, 302, 120);
-  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, fourth_id, 150, 298, 360, 24);
-  text(window_, lua_script_label_id, L"Lua script", 20, 62, 120);
-  control(window_, L"BUTTON", L"API Help", BS_PUSHBUTTON, lua_help_id, 420, 54, 90, 26);
+  text(window_, operation_label_id, L"Operation", 20, y(62), 120);
+  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, operation_id, 150, y(58), 360, 220);
+  text(window_, option_label_id, L"Button / target", 20, y(102), 120);
+  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, option_id, 150, y(98), 360, 180);
+  text(window_, position_label_id, L"Position", 20, y(142), 120);
+  control(window_, L"COMBOBOX", L"", CBS_DROPDOWNLIST, position_id, 150, y(138), 360, 180);
+  text(window_, first_label_id, L"Value", 20, y(182), 120);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, first_id, 150, y(178), 290, 24);
+  control(window_, L"BUTTON", L"Browse...", BS_PUSHBUTTON, browse_file_id, 444, y(178), 66, 24);
+  text(window_, second_label_id, L"Value", 20, y(222), 120);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, second_id, 150, y(218), 360, 24);
+  text(window_, third_label_id, L"Value", 20, y(262), 120);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, third_id, 150, y(258), 290, 24);
+  control(window_, L"BUTTON", L"Browse...", BS_PUSHBUTTON, browse_directory_id, 444, y(258), 66, 24);
+  text(window_, fourth_label_id, L"Value", 20, y(302), 120);
+  control(window_, L"EDIT", L"", ES_AUTOHSCROLL, fourth_id, 150, y(298), 360, 24);
+  text(window_, lua_script_label_id, L"Lua script", 20, y(62), 120);
+  control(window_, L"BUTTON", L"API Help", BS_PUSHBUTTON, lua_help_id, 420, y(54), 90, 26);
   (void)::LoadLibraryW(L"Msftedit.dll");
   control(window_, MSFTEDIT_CLASS, L"",
           ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL,
-          lua_script_id, 20, 88, 490, 242);
-  control(window_, L"BUTTON", L"Remove mapping", BS_PUSHBUTTON, remove_id, 20, 350, 120, 28);
-  control(window_, L"BUTTON", L"Validate", BS_PUSHBUTTON, validate_lua_id, 150, 350, 86, 28);
-  control(window_, L"BUTTON", L"Test", BS_PUSHBUTTON, test_lua_id, 244, 350, 72, 28);
-  control(window_, L"BUTTON", L"Save", BS_DEFPUSHBUTTON, save_action_id, 350, 350, 76, 28);
-  control(window_, L"BUTTON", L"Cancel", BS_PUSHBUTTON, cancel_action_id, 434, 350, 76, 28);
+          lua_script_id, 20, y(88), 490, 242);
+  control(window_, L"BUTTON", L"Remove mapping", BS_PUSHBUTTON, remove_id, 20, y(350), 120, 28);
+  if (!global_targets_.empty()) show(window_, remove_id, false);
+  control(window_, L"BUTTON", L"Validate", BS_PUSHBUTTON, validate_lua_id, 150, y(350), 86, 28);
+  control(window_, L"BUTTON", L"Test", BS_PUSHBUTTON, test_lua_id, 244, y(350), 72, 28);
+  control(window_, L"BUTTON", L"Save", BS_DEFPUSHBUTTON, save_action_id, 350, y(350), 76, 28);
+  control(window_, L"BUTTON", L"Cancel", BS_PUSHBUTTON, cancel_action_id, 434, y(350), 76, 28);
   ::EnumChildWindows(window_, [](HWND child, LPARAM font) -> BOOL {
     ::SendMessageW(child, WM_SETFONT, static_cast<WPARAM>(font), TRUE);
     return TRUE;
