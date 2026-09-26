@@ -27,6 +27,23 @@ the selected global mapping; **Delete Action** removes its mapping without delet
 The Applications tab holds profile-specific actions. Use the Gestures tab to browse the full pattern
 catalog. Configuration and shared Lua scripts are stored under `%LOCALAPPDATA%\StrokesPlusPlus`.
 
+## Release 0.10.0
+
+- Assign keyboard, mouse, window, media, volume, virtual desktop, process, URL, and Lua actions to
+  gestures. Application profiles can override global actions.
+- Create Lua actions in the editor, validate or test scripts, and share code through
+  `%LOCALAPPDATA%\StrokesPlusPlus\scripts\init.lua` and restricted local modules.
+- Use separate **Add Action** and **Edit Action** controls. Add lists gestures and mouse triggers
+  without an existing global or application-profile action.
+- Install with the NSIS executable or use the portable ZIP. Both include the Visual C++ runtime,
+  project license, and Lua license notice.
+
+The installer is unsigned, so verify its published SHA-256 checksum before running it. Strokes++
+runs without administrator privileges; Windows can block automation of elevated apps. Virtual
+desktop commands use Windows shortcuts and may report success even when the system does not perform
+the requested operation. Configuration remains under `%LOCALAPPDATA%\StrokesPlusPlus` after an
+upgrade or uninstall.
+
 
 ## Build
 Requirements:
@@ -95,8 +112,7 @@ Get-Content "$installer.sha256"
 The packages are currently unsigned; check the published checksum before running an installer
 downloaded from elsewhere.
 
-See [release notes](RELEASE_NOTES.md) for the current version and [release steps](RELEASING.md)
-for the publication checklist.
+See [release steps](RELEASING.md) for the publication checklist.
 
 ## Action configuration schema
 

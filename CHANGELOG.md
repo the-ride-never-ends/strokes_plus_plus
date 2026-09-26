@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Included the logo referenced by the packaged README in both release formats.
 - Made the packaging script find NSIS in standard Program Files locations or through
   `STROKES_NSIS`, as well as on `PATH`.
+- Consolidated the 0.10.0 release notes into the README while keeping the publication checklist
+  in `RELEASING.md`.
 
 ### Packaging
 
