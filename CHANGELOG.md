@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.10.0]
 
+### Public release preparation
+
+- Updated the README to describe the current application, installer, configuration, logging, and
+  action behavior, with a short first-run guide and release verification steps.
+- Added the Lua 5.4.9 copyright and MIT license notice to both release packages.
+- Aligned the executable's copyright metadata with the project license.
+- Added user-facing release notes and a repeatable publication checklist for the installer and
+  portable ZIP.
+- Included the logo referenced by the packaged README in both release formats.
+- Made the packaging script find NSIS in standard Program Files locations or through
+  `STROKES_NSIS`, as well as on `PATH`.
+
 ### Packaging
 
 - Built the 0.10.0 Windows NSIS64 executable installer and its SHA-256 checksum from the Release

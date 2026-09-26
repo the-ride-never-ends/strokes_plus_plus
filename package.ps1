@@ -21,6 +21,22 @@ function Find-CMake {
     throw 'CMake was not found. Add it to PATH or set STROKES_CMAKE to cmake.exe.'
 }
 
+function Find-MakeNSIS {
+    if ($env:STROKES_NSIS -and
+        (Test-Path -LiteralPath $env:STROKES_NSIS -PathType Leaf)) {
+        return (Resolve-Path -LiteralPath $env:STROKES_NSIS).Path
+    }
+    $command = Get-Command makensis.exe -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+    foreach ($programFiles in @([Environment]::GetEnvironmentVariable('ProgramFiles(x86)'),
+                                 $env:ProgramFiles)) {
+        if (-not $programFiles) { continue }
+        $candidate = Join-Path $programFiles 'NSIS\makensis.exe'
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    throw 'NSIS is required to build the installer. Install NSIS or set STROKES_NSIS to makensis.exe.'
+}
+
 $cmake = Find-CMake
 $toolDirectory = Split-Path -Parent $cmake
 $cpack = Join-Path $toolDirectory 'cpack.exe'
@@ -32,9 +48,9 @@ if (-not (Test-Path -LiteralPath $ctest -PathType Leaf)) {
     throw "CTest was not found beside CMake: $ctest"
 }
 
-if (($Format -eq 'NSIS64' -or $Format -eq 'Both') -and
-    -not (Get-Command makensis.exe -ErrorAction SilentlyContinue)) {
-    throw 'NSIS is required to build the installer. Install NSIS, then run this script again.'
+if ($Format -eq 'NSIS64' -or $Format -eq 'Both') {
+    $makensis = Find-MakeNSIS
+    $env:PATH = (Split-Path -Parent $makensis) + ';' + $env:PATH
 }
 
 & $cmake -S $sourceDirectory -B $buildDirectory -A x64 `

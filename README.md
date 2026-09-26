@@ -2,17 +2,30 @@
 
 ![Strokes++ logo](resources/strokes_plus_plus_logo.svg)
 
-
-By GPT-5.6 Sol, Claude Opus 5, Kyle Rose
+Created by Kyle Rose with contributions from GPT-5.6 Sol and Claude Opus 5.
 
 ## Description
-Prototype for a native Windows 11 mouse-gesture application, inspired by Strokes Plus and StrokesPlus.net. Runs in the notification area, captures configurable global mouse gestures, recognizes trained single-stroke shapes, and executes global or application-specific actions.
+Strokes++ is a native Windows 11 x64 mouse-gesture application inspired by Strokes Plus and
+StrokesPlus.net. It runs in the notification area, recognizes configurable single-stroke gestures,
+and executes global or application-specific actions.
 
 The action engine supports keyboard shortcut sequences, executable launches, registered URLs and
 URIs, mouse input, window manipulation, media commands, output volume, and Windows virtual desktop
 commands. Application-profile actions retain first-match precedence over global actions.
 
-Note: This program is not affiliated with the other Strokes projects, nor uses any of their source code.
+This project is not affiliated with the other Strokes projects and does not use their source code.
+
+## Getting started
+
+Install the Windows package or build from source, then start Strokes++. The application runs in the
+notification area without a taskbar window. Left-click its icon to enable or disable gestures;
+right-click it to open the menu for Settings, Lua reload, and Exit.
+
+The Global Actions tab shows built-in action assignments and gesture previews. **Add Action**
+chooses a gesture or mouse trigger that has no global or application action. **Edit Action** changes
+the selected global mapping; **Delete Action** removes its mapping without deleting the gesture.
+The Applications tab holds profile-specific actions. Use the Gestures tab to browse the full pattern
+catalog. Configuration and shared Lua scripts are stored under `%LOCALAPPDATA%\StrokesPlusPlus`.
 
 
 ## Build
@@ -47,12 +60,15 @@ cmake --build build-vs2026 --config Debug
 ctest --test-dir build-vs2026 -C Debug --output-on-failure
 ```
 
-Run `build-vs2026/Debug/StrokesPlusPlus.exe` (or the equivalent configured build directory). The application has no taskbar window. Use its notification-area icon to enable or disable gestures, open Settings, or exit. Settings run in-process for the MVP. Recognition runs on the engine worker thread and actions execute on a separate action worker; the engine currently waits for each action to finish, which is being changed so that a slow action cannot delay the next gesture.
+Run `build-vs2026/Debug/StrokesPlusPlus.exe` (or the equivalent configured build directory).
+Recognition runs on an engine worker and actions run on a separate action worker. The engine waits
+for each action result before processing the next gesture.
 
 ## Installer
 
 The Windows installer is built from a tested Release configuration with CMake, CPack, and NSIS.
-Install [NSIS](https://nsis.sourceforge.io/) and run:
+Install [NSIS](https://nsis.sourceforge.io/) and run (or set `STROKES_NSIS` to the full path of
+`makensis.exe`):
 
 ```powershell
 .\package.ps1
@@ -66,6 +82,21 @@ application is upgraded or removed. To create both the installer and a portable 
 ```powershell
 .\package.ps1 -Format Both
 ```
+
+The package script builds Release, runs the full test suite, and generates a SHA-256 file for each
+package. For example, verify the installer with:
+
+```powershell
+$installer = 'build-package\packages\StrokesPlusPlus-0.10.0-win64.exe'
+Get-FileHash -Algorithm SHA256 $installer
+Get-Content "$installer.sha256"
+```
+
+The packages are currently unsigned; check the published checksum before running an installer
+downloaded from elsewhere.
+
+See [release notes](RELEASE_NOTES.md) for the current version and [release steps](RELEASING.md)
+for the publication checklist.
 
 ## Action configuration schema
 
@@ -96,9 +127,8 @@ Actions are stored under `global_actions` or a profile's `actions` object. Each 
 Mouse positions may be `current_cursor`, `gesture_start`, `gesture_end`, or `absolute`; absolute
 positions include numeric `x` and `y`. Window targets may be `gesture_window`,
 `foreground_window`, or `window_at_gesture_start`. Move actions add the required `x` and `y` fields,
-resize actions add `width` and `height`, and move-resize actions add all four. Fields belonging to
-another operation are currently applied if present, so a hand-edited move action that still carries
-`width` and `height` also resizes the window.
+resize actions add `width` and `height`, and move-resize actions add all four. A move action ignores
+stored width and height; a resize action ignores stored x and y coordinates.
 
 Phase 1 keyboard records without an action-level `version` remain supported and are written in the
 versioned representation on the next save. Invalid mappings are skipped independently, so valid
@@ -149,7 +179,13 @@ failed action.
 
 ## Windows security boundary
 
-Strokes++ is designed to run without administrator privileges. Windows User Interface Privilege Isolation (UIPI) can prevent its `SendInput` keyboard shortcuts from reaching an application running at a higher integrity level, such as an administrator-elevated window. This is an expected Windows security restriction. The action is reported as an injection failure when Windows exposes the failure. Elevated-process automation is not part of the MVP, and running Strokes++ as administrator has not been tested nor is not recommended for normal use. Windows may also deny process-image queries for elevated windows. in that case process-name profile matching is unavailable, while title and window-class criteria can still be used.
+Strokes++ is designed to run without administrator privileges. Windows User Interface Privilege
+Isolation (UIPI) can prevent its `SendInput` keyboard shortcuts from reaching an application
+running at a higher integrity level, such as an administrator-elevated window. This is an expected
+Windows security restriction. The action is reported as an injection failure when Windows exposes
+the failure. Elevated-process automation is unsupported. Windows may also deny process-image
+queries for elevated windows. In that case, process-name profile matching is unavailable, while
+title and window-class criteria can still be used.
 
 The same integrity boundary applies to synthetic mouse, media, and virtual-desktop input. Windows
 may deny foreground activation even for a valid window; this is reported as an action failure.
@@ -160,10 +196,14 @@ does not yet detect whether those shortcuts are available, so a virtual desktop 
 success whenever Windows accepts the keystrokes, even on a system where they do nothing. Runtime
 capability detection is planned.
 
-The application performs no network communication, analytics, cloud synchronization, or update checks. Configuration remains under `%LOCALAPPDATA%\StrokesPlusPlus`. Log messages for the current run in are written to `log.txt` beside `StrokesPlusPlus.exe` in structured JSON line format.
+The application has no built-in network communication, analytics, cloud synchronization, or update
+checks. User-configured process, URI, and Lua actions can launch other applications or network
+handlers. Logs for the current run use structured JSON lines in `log.txt` in the launch directory,
+falling back to the executable directory if needed.
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the [MIT License](LICENSE). Lua's separate notice is in
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt), which is included in release packages.
 
-Copyright (c) 2026 Strokes++ contributors
+Copyright (c) 2026 Kyle Rose

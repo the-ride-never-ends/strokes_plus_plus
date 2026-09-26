@@ -110,7 +110,10 @@ if(WIN32)
     endif()
 
     install(TARGETS StrokesPlusPlus RUNTIME DESTINATION . COMPONENT Application)
-    install(FILES LICENSE README.md DESTINATION . COMPONENT Application)
+    install(FILES LICENSE README.md RELEASE_NOTES.md RELEASING.md THIRD_PARTY_NOTICES.txt
+            DESTINATION . COMPONENT Application)
+    install(FILES resources/strokes_plus_plus_logo.svg DESTINATION resources
+            COMPONENT Application)
 
     if(MSVC)
         set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
