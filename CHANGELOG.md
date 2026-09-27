@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.10.0]
 
+### Fixed
+
+- Raise the mouse trace overlay above application windows each time a gesture starts, while keeping
+  focus on the active application.
+- Relinked and tested the Debug and Release development executables with the trace fix.
+
 ### Public release preparation
 
 - Updated the README to describe the current application, installer, configuration, logging, and

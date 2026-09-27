@@ -127,7 +127,8 @@ LRESULT WindowsGestureOverlay::handle_message(UINT message, WPARAM wp, LPARAM lp
     if (memory_dc_ == nullptr) create_buffer();
     if (memory_dc_ == nullptr) return 0;
     draw_segments();
-    ::ShowWindow(window_, SW_SHOWNOACTIVATE);
+    ::SetWindowPos(window_, HWND_TOPMOST, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     ::InvalidateRect(window_, nullptr, FALSE);
     return 0;
   }

@@ -548,6 +548,46 @@ int main() {
   check(overlay.create(::GetModuleHandleW(nullptr), {false, 4, 217, RGB(0, 160, 255)}),
         "disabled Win32 overlay can be created without showing UI");
   overlay.destroy();
+  HWND ordinary_window = ::CreateWindowExW(0, L"STATIC", L"", WS_POPUP,
+                                           ::GetSystemMetrics(SM_XVIRTUALSCREEN),
+                                           ::GetSystemMetrics(SM_YVIRTUALSCREEN), 1, 1,
+                                           nullptr, nullptr, ::GetModuleHandleW(nullptr), nullptr);
+  check(ordinary_window != nullptr, "ordinary window for overlay stacking test is created");
+  if (ordinary_window != nullptr) {
+    ::ShowWindow(ordinary_window, SW_SHOWNOACTIVATE);
+    check(overlay.create(::GetModuleHandleW(nullptr)), "enabled trace overlay is created");
+    HWND overlay_window = nullptr;
+    for (HWND window = ::GetTopWindow(nullptr); window != nullptr;
+         window = ::GetWindow(window, GW_HWNDNEXT)) {
+      if (::GetWindowLongPtrW(window, GWLP_USERDATA) == reinterpret_cast<LONG_PTR>(&overlay)) {
+        overlay_window = window;
+        break;
+      }
+    }
+    check(overlay_window != nullptr, "trace overlay window is available for stacking test");
+    if (overlay_window != nullptr)
+      ::SetWindowPos(overlay_window, HWND_BOTTOM, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    overlay.show({});
+    MSG message{};
+    while (::PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
+      ::TranslateMessage(&message);
+      ::DispatchMessageW(&message);
+    }
+    bool saw_overlay = false;
+    bool saw_ordinary = false;
+    for (HWND window = ::GetTopWindow(nullptr); window != nullptr;
+         window = ::GetWindow(window, GW_HWNDNEXT)) {
+      if (window == ordinary_window) {
+        saw_ordinary = true;
+        break;
+      }
+      if (window == overlay_window) saw_overlay = true;
+    }
+    check(saw_overlay && saw_ordinary, "trace overlay is above an ordinary application window");
+    overlay.destroy();
+    ::DestroyWindow(ordinary_window);
+  }
   context::WindowsApplicationContextProvider context;
   if (const auto foreground = context.foreground_application()) {
     check(foreground->process_id != 0, "available foreground application context has a process ID");

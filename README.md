@@ -2,7 +2,7 @@
 
 ![Strokes++ logo](resources/strokes_plus_plus_logo.svg)
 
-Created by Kyle Rose with contributions from GPT-5.6 Sol and Claude Opus 5.
+By GPT-5.6 Sol, Claude Opus 5, Kyle Rose 
 
 ## Description
 Strokes++ is a native Windows 11 x64 mouse-gesture application inspired by Strokes Plus and
