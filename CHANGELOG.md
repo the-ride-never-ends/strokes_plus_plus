@@ -11,6 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Relinked and tested the Debug and Release development executables with version 1.0.0 metadata.
 - Changed `run.ps1` to build and launch the non-debug Release executable by default.
+- Made the PowerShell build scripts discover compatible CMake installations without assuming a
+  specific installed version, require CMake 3.25 or newer, and share one tool-discovery helper.
+- Folded the Debug runner into `run.ps1`; use `-Configuration Debug` when a Debug build is needed.
+- Allowed callers to select another CMake generator and avoided passing Visual Studio's `-A`
+  option to generators such as Ninja.
+- Folded the shared PowerShell build helpers into the runner and packaging scripts so each main
+  script remains self-contained.
 
 ## [0.10.0]
 
