@@ -4,6 +4,14 @@ All notable changes to Strokes++ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+
+## [1.0.0]
+
+### Public release
+
+- Relinked and tested the Debug and Release development executables with version 1.0.0 metadata.
+- Changed `run.ps1` to build and launch the non-debug Release executable by default.
+
 ## [0.10.0]
 
 ### Fixed

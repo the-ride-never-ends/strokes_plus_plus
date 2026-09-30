@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release', 'RelWithDebInfo', 'MinSizeRel')]
-    [string]$Configuration = 'Release',
+    [string]$Configuration = 'Debug',
 
     [string]$BuildDirectory = 'build-vs2026',
 

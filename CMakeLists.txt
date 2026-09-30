@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(strokes_plus_plus VERSION 0.10.0 LANGUAGES C CXX)
+project(strokes_plus_plus VERSION 1.0.0 LANGUAGES C CXX)
 
 option(STROKES_BUILD_TESTS "Build the unit tests" ON)
 

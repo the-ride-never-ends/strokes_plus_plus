@@ -14,20 +14,20 @@ URIs, mouse input, window manipulation, media commands, output volume, and Windo
 commands. Application-profile actions retain first-match precedence over global actions.
 
 This project is not affiliated with the other Strokes projects and does not use their source code.
+The primary goal of this project was to see if I could vibe code a working application in a language I have minimal experience with. The secondary goal was to provide open-sourced source code for others to bootstrap their own implementations and extensions.
 
 ## Getting started
 
 Install the Windows package or build from source, then start Strokes++. The application runs in the
-notification area without a taskbar window. Left-click its icon to enable or disable gestures;
-right-click it to open the menu for Settings, Lua reload, and Exit.
+notification area without a taskbar window. Left-click its icon to enable or disable gestures.
+Right-click it to open the menu for Settings, Lua reload, and Exit.
 
 The Global Actions tab shows built-in action assignments and gesture previews. **Add Action**
-chooses a gesture or mouse trigger that has no global or application action. **Edit Action** changes
-the selected global mapping; **Delete Action** removes its mapping without deleting the gesture.
+chooses a gesture or mouse trigger that has no global or application action. **Edit Action** changes the selected global mapping; **Delete Action** removes its mapping without deleting the gesture.
 The Applications tab holds profile-specific actions. Use the Gestures tab to browse the full pattern
 catalog. Configuration and shared Lua scripts are stored under `%LOCALAPPDATA%\StrokesPlusPlus`.
 
-## Release 0.10.0
+## Release 1.0.0
 
 - Assign keyboard, mouse, window, media, volume, virtual desktop, process, URL, and Lua actions to
   gestures. Application profiles can override global actions.
@@ -39,7 +39,7 @@ catalog. Configuration and shared Lua scripts are stored under `%LOCALAPPDATA%\S
   project license, and Lua license notice.
 
 The installer is unsigned, so verify its published SHA-256 checksum before running it. Strokes++
-runs without administrator privileges; Windows can block automation of elevated apps. Virtual
+runs without administrator privileges, as Windows can block automation of elevated apps. Virtual
 desktop commands use Windows shortcuts and may report success even when the system does not perform
 the requested operation. Configuration remains under `%LOCALAPPDATA%\StrokesPlusPlus` after an
 upgrade or uninstall.
@@ -109,7 +109,7 @@ Get-FileHash -Algorithm SHA256 $installer
 Get-Content "$installer.sha256"
 ```
 
-The packages are currently unsigned; check the published checksum before running an installer
+The packages are currently unsigned. Check the published checksum before running an installer
 downloaded from elsewhere.
 
 See [release steps](RELEASING.md) for the publication checklist.
