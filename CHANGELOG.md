@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   option to generators such as Ninja.
 - Folded the shared PowerShell build helpers into the runner and packaging scripts so each main
   script remains self-contained.
+- Replaced the environment-specific development build-directory name with the generic `build`
+  directory in the runner and documentation.
 
 ## [0.10.0]
 

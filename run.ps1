@@ -3,7 +3,7 @@ param(
     [ValidateSet('Debug', 'Release', 'RelWithDebInfo', 'MinSizeRel')]
     [string]$Configuration = 'Release',
 
-    [string]$BuildDirectory = 'build-vs2026',
+    [string]$BuildDirectory = 'build',
 
     [string]$Generator = $env:CMAKE_GENERATOR,
 

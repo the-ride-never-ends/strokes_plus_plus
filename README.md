@@ -72,12 +72,12 @@ To build and test without launching the application:
 The equivalent manual commands are:
 
 ```powershell
-cmake -S . -B build-vs2026 -A x64
-cmake --build build-vs2026 --config Debug
-ctest --test-dir build-vs2026 -C Debug --output-on-failure
+cmake -S . -B build -A x64
+cmake --build build --config Debug
+ctest --test-dir build -C Debug --output-on-failure
 ```
 
-Run `build-vs2026/Debug/StrokesPlusPlus.exe` (or the equivalent configured build directory).
+Run `build/Debug/StrokesPlusPlus.exe` (or the equivalent configured build directory).
 Recognition runs on an engine worker and actions run on a separate action worker. The engine waits
 for each action result before processing the next gesture.
 
